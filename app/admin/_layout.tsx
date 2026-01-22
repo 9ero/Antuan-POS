@@ -1,7 +1,20 @@
 import { useRouter, Stack } from 'expo-router';
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+    Box,
+    Text,
+    Button,
+    ButtonText,
+    Input,
+    InputField,
+    VStack,
+    Heading,
+    Center,
+    FormControl,
+    FormControlLabel,
+    FormControlLabelText,
+} from '@gluestack-ui/themed';
 
 export default function AdminLayout() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -19,31 +32,34 @@ export default function AdminLayout() {
 
     if (!isAuthenticated) {
         return (
-            <SafeAreaView className="flex-1 bg-white justify-center items-center">
-                <View className="w-4/5">
-                    <Text className="text-2xl font-bold text-center mb-8">Administración</Text>
-                    <Text className="mb-2 text-gray-600">Ingrese PIN de acceso:</Text>
-                    <TextInput
-                        className="border border-gray-300 rounded-lg p-4 text-center text-xl mb-4"
-                        secureTextEntry
-                        keyboardType="numeric"
-                        maxLength={4}
-                        value={pin}
-                        onChangeText={setPin}
-                    />
-                    <TouchableOpacity
-                        className="bg-blue-600 p-4 rounded-lg"
-                        onPress={handleLogin}
-                    >
-                        <Text className="text-white text-center font-bold text-lg">Ingresar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        className="mt-4 p-4"
-                        onPress={() => router.back()}
-                    >
-                        <Text className="text-blue-600 text-center">Volver</Text>
-                    </TouchableOpacity>
-                </View>
+            <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
+                <Center flex={1}>
+                    <Box w="$3/4" maxWidth={400}>
+                        <Heading textAlign="center" mb="$8" size="2xl">Administración</Heading>
+                        <FormControl mb="$6">
+                            <FormControlLabel mb="$2">
+                                <FormControlLabelText color="$coolGray600">Ingrese PIN de acceso</FormControlLabelText>
+                            </FormControlLabel>
+                            <Input size="xl">
+                                <InputField
+                                    secureTextEntry
+                                    keyboardType="numeric"
+                                    maxLength={4}
+                                    value={pin}
+                                    onChangeText={setPin}
+                                    textAlign="center"
+                                />
+                            </Input>
+                        </FormControl>
+
+                        <Button onPress={handleLogin} size="xl" mb="$4">
+                            <ButtonText>Ingresar</ButtonText>
+                        </Button>
+                        <Button onPress={() => router.back()} variant="outline" size="lg">
+                            <ButtonText>Volver</ButtonText>
+                        </Button>
+                    </Box>
+                </Center>
             </SafeAreaView>
         );
     }

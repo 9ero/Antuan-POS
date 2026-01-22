@@ -1,6 +1,5 @@
 import { dbResult } from './database';
-import { User, Product, CartItem, Transaction } from './types';
-import * as SQLite from 'expo-sqlite';
+import { User, Product, CartItem, Transaction, TransactionSchema } from './schemas';
 
 export { User, Product, CartItem, Transaction };
 
@@ -17,17 +16,44 @@ export const deleteUser = async (id: number) => {
     return await dbResult.runAsync('DELETE FROM users WHERE id = ?', id);
 };
 
-// Products
-export const getProducts = async (): Promise<Product[]> => {
-    return await dbResult.getAllAsync('SELECT * FROM products ORDER BY name ASC');
+export const updateUser = async (id: number, name: string) => {
+    return await dbResult.runAsync('UPDATE users SET name = ? WHERE id = ?', name, id);
 };
 
-export const addProduct = async (name: string, price: number, barcode: string = '') => {
-    return await dbResult.runAsync('INSERT INTO products (name, price, barcode) VALUES (?, ?, ?)', name, price, barcode);
+// Products
+export const getProducts = async (): Promise<Product[]> => {
+    return await dbResult.getAllAsync('SELECT * FROM products WHERE is_active = 1 ORDER BY name ASC');
+};
+
+export const addProduct = async (name: string, price: number, barcode: string = '', stock: number = 0) => {
+    if (barcode) {
+        const existing = await getProductByBarcode(barcode);
+        if (existing) {
+            if (existing.is_active === 0) {
+                // Reactivate and update
+                return await dbResult.runAsync(
+                    'UPDATE products SET name = ?, price = ?, stock = ?, is_active = 1 WHERE id = ?',
+                    name, price, stock, existing.id!
+                );
+            }
+            throw new Error(`El código de barras "${barcode}" ya está registrado.`);
+        }
+    }
+    return await dbResult.runAsync('INSERT INTO products (name, price, barcode, stock, is_active) VALUES (?, ?, ?, ?, 1)', name, price, barcode, stock);
+};
+
+export const updateProduct = async (id: number, name: string, price: number, barcode: string, stock: number) => {
+    if (barcode) {
+        const existing = await getProductByBarcode(barcode);
+        if (existing && existing.id !== id) {
+            throw new Error(`El código de barras "${barcode}" ya pertenece a otro producto.`);
+        }
+    }
+    return await dbResult.runAsync('UPDATE products SET name = ?, price = ?, barcode = ?, stock = ? WHERE id = ?', name, price, barcode, stock, id);
 };
 
 export const deleteProduct = async (id: number) => {
-    return await dbResult.runAsync('DELETE FROM products WHERE id = ?', id);
+    return await dbResult.runAsync('UPDATE products SET is_active = 0 WHERE id = ?', id);
 };
 
 export const getProductByBarcode = async (barcode: string): Promise<Product | null> => {
@@ -35,7 +61,7 @@ export const getProductByBarcode = async (barcode: string): Promise<Product | nu
 };
 
 // Transactions
-export const createTransaction = async (userId: number, total: number, items: { id: number, price: number, quantity: number }[]) => {
+export const createTransaction = async (userId: number, total: number, items: CartItem[]) => {
     try {
         await dbResult.execAsync('BEGIN TRANSACTION');
 
@@ -43,28 +69,57 @@ export const createTransaction = async (userId: number, total: number, items: { 
         const transactionId = result.lastInsertRowId;
 
         for (const item of items) {
+            // Check stock
+            const product = await dbResult.getFirstAsync<Product>('SELECT stock, name FROM products WHERE id = ?', item.id!);
+            if (!product) throw new Error(`Producto no encontrado: ${item.id}`);
+            if (product.stock < item.quantity) {
+                throw new Error(`Stock insuficiente para ${product.name}. Disponible: ${product.stock}`);
+            }
+
             await dbResult.runAsync(
                 'INSERT INTO transaction_items (transaction_id, product_id, price_at_purchase, quantity) VALUES (?, ?, ?, ?)',
-                transactionId, item.id, item.price, item.quantity
+                transactionId, item.id!, item.price, item.quantity
             );
+
+            // Decrement Stock
+            await dbResult.runAsync('UPDATE products SET stock = stock - ? WHERE id = ?', item.quantity, item.id!);
         }
 
         await dbResult.execAsync('COMMIT');
-        return true;
+        return { success: true };
     } catch (e) {
         console.error(e);
         await dbResult.execAsync('ROLLBACK');
-        return false;
+        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
+    }
+}
+
+
+export const deleteAllTransactions = async () => {
+    try {
+        await dbResult.execAsync('BEGIN TRANSACTION');
+        await dbResult.runAsync('DELETE FROM transaction_items');
+        await dbResult.runAsync('DELETE FROM transactions');
+        await dbResult.execAsync('COMMIT');
+        return { success: true };
+    } catch (e) {
+        console.error(e);
+        await dbResult.execAsync('ROLLBACK');
+        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
     }
 };
 
-export interface TransactionDetail extends Transaction {
-    user_name: string;
+export interface TransactionDetail {
+    id: number;
+    user_id: number;
+    total: number;
     items: {
         product_name: string;
         quantity: number;
         price: number;
     }[];
+    created_at?: string;
+    user_name: string;
 }
 
 export const getTransactions = async (): Promise<TransactionDetail[]> => {
@@ -98,11 +153,11 @@ export const getTransactions = async (): Promise<TransactionDetail[]> => {
         if (!transactionsMap.has(row.transaction_id)) {
             transactionsMap.set(row.transaction_id, {
                 id: row.transaction_id,
-                user_id: 0, // Not needed for display
+                user_id: 0,
                 total: row.total,
+                items: [],
                 created_at: row.created_at,
                 user_name: row.user_name,
-                items: []
             });
         }
 
