@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { GluestackUIProvider, Text, Box } from '@gluestack-ui/themed';
 import { config } from '@gluestack-ui/config';
-import { initDatabase } from '../db/database';
+import { initDatabase } from '@/db/database';
 import '../global.css';
 
 export default function Layout() {

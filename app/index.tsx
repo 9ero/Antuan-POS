@@ -28,11 +28,11 @@ import {
     RemoveIcon
 } from '@gluestack-ui/themed';
 
-import { useCart } from '../hooks/useCart';
-import { useProductSearch } from '../hooks/useProductSearch';
-import { useScanner } from '../hooks/useScanner';
-import { createTransaction } from '../db/queries';
-import { User, Product } from '../db/schemas';
+import { useCart } from '@/hooks/useCart';
+import { useProductSearch } from '@/hooks/useProductSearch';
+import { useScanner } from '@/hooks/useScanner';
+import { createTransaction } from '@/db/queries';
+import { User, Product } from '@/db/schemas';
 
 export default function POSScreen() {
     const router = useRouter();
@@ -174,7 +174,7 @@ export default function POSScreen() {
                 <Box flex={2} p="$4">
                     {/* Header Links */}
                     <HStack justifyContent="space-between" mb="$4" alignItems="center">
-                        <Heading size="xl" color="$purple600">POS System</Heading>
+                        <Heading size="xl" color="$purple600">Antuan POS</Heading>
                         <HStack space="md">
                             <Link href="/history" asChild>
                                 <Button variant="outline" size="sm">

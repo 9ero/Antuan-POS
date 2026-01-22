@@ -1,7 +1,7 @@
 import { Modal, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { Product, getProducts, addProduct, deleteProduct, updateProduct } from '../../../db/queries';
+import { Product, getProducts, addProduct, deleteProduct, updateProduct } from '@/db/queries';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView } from 'expo-camera';
 import { useFocusEffect } from 'expo-router';
@@ -37,7 +37,7 @@ import {
     SelectItem,
     EditIcon,
 } from '@gluestack-ui/themed';
-import { useScanner } from '../../../hooks/useScanner';
+import { useScanner } from '@/hooks/useScanner';
 
 export default function ProductsAdmin() {
     const [products, setProducts] = useState<Product[]>([]);

@@ -1,5 +1,5 @@
 {
-  "name": "groceryapp",
+  "name": "antuan-pos",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "^54.0.9",
     "typescript": "~5.9.2"
   },

@@ -1,7 +1,6 @@
-import { View, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { getTransactions, TransactionDetail, deleteAllTransactions } from '../db/queries';
+import { getTransactions, TransactionDetail, deleteAllTransactions } from '@/db/queries';
 import { useFocusEffect } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';

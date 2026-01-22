@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Product, CartItem } from '../db/schemas';
+import { Product, CartItem } from '@/db/schemas';
 
 export const useCart = () => {
     const [cart, setCart] = useState<CartItem[]>([]);

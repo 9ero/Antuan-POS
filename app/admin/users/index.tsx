@@ -1,7 +1,7 @@
 import { Modal, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { User, getUsers, addUser, deleteUser, updateUser } from '../../../db/queries';
+import { User, getUsers, addUser, deleteUser, updateUser } from '@/db/queries';
 import { useFocusEffect } from 'expo-router';
 import {
     Box,

@@ -1,47 +1,295 @@
-# Grocery App - Sistema de Punto de Venta (POS)
+# 🛒 Antuan POS - Sistema de Punto de Venta
 
-Aplicación móvil desarrollada en **React Native (Expo)** para la gestión de una tienda de comestibles. Incluye funciones de punto de venta, inventario, gestión de usuarios e historial de transacciones.
+[![React Native](https://img.shields.io/badge/React%20Native-0.81-blue.svg)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-SDK%2054-000020.svg)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-Private-red.svg)]()
 
-## Desarrollador
-**Nombre:** Juan Miguel Fernández Araya  
-**Email:** fernandezarayajuanmiguel@gmail.com
+Sistema de punto de venta (POS) móvil desarrollado con **React Native** y **Expo**, diseñado para pequeños negocios y tiendas de abarrotes. Incluye gestión de inventario, clientes, historial de ventas y exportación a Excel.
 
-## Características Principales
+---
 
-### 🛒 Punto de Venta (POS)
-- **Escáner de Código de Barras**: Agrega productos rápidamente usando la cámara del dispositivo.
-- **Búsqueda Manual**: Encuentra productos y clientes por nombre.
-- **Carrito de Compras**: Gestión de cantidades y cálculo automático de totales en Colones (₡).
-- **Interfaz Vertical**: Diseño optimizado para uso en modo retrato.
+## 👨‍💻 Desarrollador
 
-### 👥 Administración
-- **Gestión de Productos**: Agrega, edita y elimina productos del inventario.
-- **Gestión de Clientes**: Registra y administra la base de datos de clientes.
-- **Seguridad**: Acceso protegido por contraseña/PIN simple para áreas administrativas.
+**Juan Miguel Fernández Araya**  
+📧 fernandezarayajuanmiguel@gmail.com
 
-### 📅 Historial
-- **Registro de Ventas**: Visualiza todas las transacciones ordenadas por fecha.
-- **Detalle de Compra**: Desglose completo de productos, cantidades y precios por transacción.
+---
 
-## Tecnologías Utilizadas
-- **Core**: React Native, Expo, TypeScript.
-- **Router**: Expo Router (Navegación basada en archivos).
-- **Base de Datos**: Expo SQLite (Almacenamiento local persistente).
-- **Estilos**: NativeWind v4 (TailwindCSS para React Native).
-- **Animaciones**: React Native Reanimated.
+## ✨ Características Principales
 
-## Instalación y Ejecución
+### 🏪 Punto de Venta (POS)
+- **Escáner de Código de Barras**: Agrega productos usando la cámara del dispositivo
+- **Búsqueda Manual**: Encuentra productos y clientes fácilmente
+- **Carrito Inteligente**: 
+  - Gestión de cantidades con validación de stock
+  - Cálculo automático de totales en Colones (₡)
+  - Prevención de sobreventa
+- **Interfaz Optimizada**: Diseño vertical con carrito fijo en la parte inferior
+- **Confirmación Visual**: Modal de confirmación al escanear productos
 
-1.  **Instalar dependencias:**
-    ```bash
-    npm install
-    ```
+### 📦 Gestión de Inventario
+- **CRUD Completo**: Crear, leer, actualizar y eliminar productos
+- **Control de Stock**: Sistema de inventario en tiempo real
+- **Códigos de Barras**: Escáner integrado para registro rápido
+- **Soft Delete**: Los productos eliminados se desactivan, no se borran
+- **Reactivación Inteligente**: Reutiliza códigos de barras de productos eliminados
+- **Validación**: Previene duplicación de códigos de barras activos
 
-2.  **Iniciar la aplicación:**
-    Se recomienda usar el flag `-c` para limpiar la caché de Metro Bundler al iniciar.
-    ```bash
-    npx expo start -c
-    ```
+### 👥 Gestión de Clientes
+- **Base de Datos de Clientes**: Registro completo de información
+- **Edición en Línea**: Modifica datos de clientes existentes
+- **Búsqueda Rápida**: Encuentra clientes por nombre
 
-3.  **Probar en dispositivo:**
-    Escanea el código QR generado con la aplicación **Expo Go** en tu dispositivo Android o iOS.
+### 📊 Historial y Reportes
+- **Registro de Ventas**: Visualiza todas las transacciones por fecha
+- **Detalles Completos**: Productos, cantidades, precios y totales
+- **Exportación Excel**: Genera reportes `.xlsx` con rango de fechas
+- **Compartir**: Envía reportes por WhatsApp, email, etc.
+- **Limpieza de Datos**: Borra historial con PIN de seguridad (1234)
+
+### 🔒 Seguridad
+- **Autenticación Admin**: PIN de acceso (por defecto: `1234`)
+- **Protección de Datos**: Confirmación requerida para acciones críticas
+- **SQLite Local**: Todos los datos se almacenan localmente en el dispositivo
+
+---
+
+## 🛠 Tecnologías Utilizadas
+
+### Core
+- **React Native** `0.81.5` - Framework principal
+- **Expo** `~54.0.32` - Plataforma de desarrollo
+- **TypeScript** `~5.9.2` - Type safety
+
+### UI/UX
+- **Gluestack UI** `^1.1.73` - Sistema de diseño moderno
+- **NativeWind** `^4.2.1` - TailwindCSS para React Native
+- **React Native Reanimated** `~4.1.1` - Animaciones fluidas
+
+### Navegación y Estado
+- **Expo Router** `~6.0.22` - File-based routing
+- **React Hooks** - Gestión de estado (`useCart`, `useScanner`, `useProductSearch`)
+
+### Base de Datos
+- **Expo SQLite** `~16.0.10` - Almacenamiento local persistente
+- **Zod** `^4.3.5` - Validación de schemas y tipos
+
+### Funcionalidades
+- **Expo Camera** `~17.0.10` - Escáner de códigos de barras
+- **Expo FileSystem** `~19.0.21` - Manejo de archivos
+- **Expo Sharing** `~14.0.8` - Compartir archivos
+- **XLSX** `^0.18.5` - Generación de archivos Excel
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+Antuan-POS/
+├── app/                        # Pantallas de la aplicación
+│   ├── _layout.tsx            # Layout principal con provider
+│   ├── index.tsx              # Pantalla de POS
+│   ├── history.tsx            # Historial de ventas
+│   └── admin/                 # Módulo de administración
+│       ├── _layout.tsx        # Layout con autenticación
+│       ├── index.tsx          # Dashboard admin
+│       ├── products/
+│       │   └── index.tsx      # Gestión de productos
+│       └── users/
+│           └── index.tsx      # Gestión de usuarios
+├── db/                        # Capa de datos
+│   ├── database.ts           # Inicialización de SQLite
+│   ├── queries.ts            # Queries SQL
+│   ├── schemas.ts            # Schemas Zod
+│   └── types.ts              # Tipos TypeScript
+├── hooks/                     # Custom React Hooks
+│   ├── useCart.ts            # Lógica del carrito
+│   ├── useScanner.ts         # Control de cámara
+│   └── useProductSearch.ts   # Búsqueda de productos
+├── assets/                    # Imágenes e iconos
+├── package.json              # Dependencias
+└── README.md                 # Este archivo
+```
+
+---
+
+## 🚀 Instalación y Ejecución
+
+### Prerrequisitos
+- **Node.js** (v18+)
+- **npm** o **yarn**
+- **Expo Go** app en tu dispositivo móvil ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) | [iOS](https://apps.apple.com/app/expo-go/id982107779))
+
+### Instalación
+
+1. **Clonar el repositorio**
+   ```bash
+   git clone https://github.com/9ero/Antuan-POS.git
+   cd Antuan-POS
+   ```
+
+2. **Instalar dependencias**
+   ```bash
+   npm install
+   ```
+
+3. **Iniciar la aplicación**
+   ```bash
+   npx expo start -c
+   ```
+   > El flag `-c` limpia la caché de Metro Bundler (recomendado)
+
+4. **Probar en dispositivo**
+   - Escanea el código QR con **Expo Go**
+   - Alternativamente, usa `npx expo start --android` o `npx expo start --ios`
+
+---
+
+## 📱 Guía de Uso
+
+### Realizar una Venta
+
+1. **Seleccionar Cliente**: Busca y selecciona el cliente
+2. **Agregar Productos**:
+   - Escanea código de barras, o
+   - Toca un producto de la cuadrícula
+3. **Gestionar Cantidades**: Usa los botones `+` y `-` en el carrito
+4. **Cobrar**: Presiona el botón "Cobrar" (requiere cliente y stock disponible)
+
+### Administración
+
+1. **Acceder**: Toca "Admin" → Ingresa PIN `1234`
+2. **Productos**:
+   - Presiona `+` para agregar
+   - Toca ✏️ para editar
+   - Toca 🗑️ para eliminar (soft delete)
+3. **Usuarios**: Misma lógica que productos
+
+### Exportar Historial
+
+1. Ve a "Historial"
+2. Toca "Exportar Excel"
+3. Comparte el archivo generado
+
+---
+
+## 🗄️ Esquema de Base de Datos
+
+### Tabla: `users`
+| Campo       | Tipo    | Descripción                |
+|-------------|---------|----------------------------|
+| id          | INTEGER | Primary Key (Auto)         |
+| name        | TEXT    | Nombre del cliente         |
+| created_at  | TEXT    | Timestamp de creación      |
+
+### Tabla: `products`
+| Campo       | Tipo    | Descripción                |
+|-------------|---------|----------------------------|
+| id          | INTEGER | Primary Key (Auto)         |
+| name        | TEXT    | Nombre del producto        |
+| price       | REAL    | Precio en colones          |
+| barcode     | TEXT    | Código de barras (único)   |
+| stock       | INTEGER | Cantidad disponible        |
+| is_active   | INTEGER | 1=Activo, 0=Eliminado      |
+| created_at  | TEXT    | Timestamp de creación      |
+
+### Tabla: `transactions`
+| Campo       | Tipo    | Descripción                |
+|-------------|---------|----------------------------|
+| id          | INTEGER | Primary Key (Auto)         |
+| user_id     | INTEGER | FK → users.id              |
+| total       | REAL    | Total de la venta          |
+| created_at  | TEXT    | Timestamp de venta         |
+
+### Tabla: `transaction_items`
+| Campo              | Tipo    | Descripción                |
+|--------------------|---------|----------------------------|
+| id                 | INTEGER | Primary Key (Auto)         |
+| transaction_id     | INTEGER | FK → transactions.id       |
+| product_id         | INTEGER | FK → products.id           |
+| price_at_purchase  | REAL    | Precio al momento de venta |
+| quantity           | INTEGER | Cantidad vendida           |
+
+---
+
+## 🔧 Scripts Disponibles
+
+```bash
+# Iniciar servidor de desarrollo
+npm start
+
+# Iniciar limpiando caché (recomendado)
+npx expo start -c
+
+# Abrir en Android
+npm run android
+
+# Abrir en iOS
+npm run ios
+
+# Verificar tipos TypeScript
+npx tsc --noEmit
+
+# Limpiar y reinstalar dependencias
+rm -rf node_modules && npm install
+```
+
+---
+
+## 🐛 Solución de Problemas
+
+### Error: "SafeAreaView deprecated"
+**Causa**: Advertencia de dependencias externas (Gluestack UI, Expo Router)  
+**Solución**: Ignorar. El proyecto ya usa `react-native-safe-area-context`
+
+### Error: "No such column: is_active"
+**Causa**: Base de datos desactualizada  
+**Solución**: La migración se ejecuta automáticamente al iniciar la app
+
+### Vulnerabilidad en `xlsx`
+**Causa**: Librería desactualizada con CVEs conocidos  
+**Riesgo**: Bajo (solo generamos archivos, no los procesamos)  
+**Solución**: Esperar actualización o migrar a `exceljs`
+
+### Dependencias desactualizadas
+```bash
+npx expo install --fix
+```
+
+---
+
+## 🎯 Roadmap / Mejoras Futuras
+
+- [ ] Integración con impresora térmica Bluetooth
+- [ ] Soporte multi-moneda
+- [ ] Reportes gráficos (ventas por día/semana/mes)
+- [ ] Backup automático en la nube
+- [ ] Modo oscuro
+- [ ] Soporte multi-idioma (i18n)
+- [ ] Migrar de `xlsx` a `exceljs` (seguridad)
+- [ ] Autenticación biométrica (Touch ID / Face ID)
+
+---
+
+## 📄 Licencia
+
+Este proyecto es **privado** y de uso exclusivo.
+
+---
+
+## 🤝 Contribuciones
+
+Este es un proyecto personal. Si tienes sugerencias o encuentras bugs, contáctame por email.
+
+---
+
+## 📞 Contacto
+
+**Juan Miguel Fernández Araya**  
+📧 fernandezarayajuanmiguel@gmail.com  
+🔗 [GitHub: 9ero](https://github.com/9ero)
+
+---
+
+**Desarrollado con ❤️ en Costa Rica 🇨🇷**

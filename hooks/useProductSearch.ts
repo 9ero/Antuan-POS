@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { User, Product, getUsers, getProducts } from '../db/queries';
+import { User, Product, getUsers, getProducts } from '@/db/queries';
 
 export const useProductSearch = () => {
     const [users, setUsers] = useState<User[]>([]);
