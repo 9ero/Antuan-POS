@@ -3,7 +3,7 @@
 [![React Native](https://img.shields.io/badge/React%20Native-0.81-blue.svg)](https://reactnative.dev/)
 [![Expo](https://img.shields.io/badge/Expo-SDK%2054-000020.svg)](https://expo.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/License-Private-red.svg)]()
+[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 Sistema de punto de venta (POS) móvil desarrollado con **React Native** y **Expo**, diseñado para pequeños negocios y tiendas de abarrotes. Incluye gestión de inventario, clientes, historial de ventas y exportación a Excel.
 
@@ -189,9 +189,9 @@ Antuan-POS/
 | id          | INTEGER | Primary Key (Auto)         |
 | name        | TEXT    | Nombre del producto        |
 | price       | REAL    | Precio en colones          |
-| barcode     | TEXT    | Código de barras (único)   |
+| barcode     | TEXT    | Código de barras (único y opcional)   |
 | stock       | INTEGER | Cantidad disponible        |
-| is_active   | INTEGER | 1=Activo, 0=Eliminado      |
+| is_active   | INTEGER | 1=Activo, 0=Eliminado (soft delete)     |
 | created_at  | TEXT    | Timestamp de creación      |
 
 ### Tabla: `transactions`
@@ -274,13 +274,33 @@ npx expo install --fix
 
 ## 📄 Licencia
 
-Este proyecto es **privado** y de uso exclusivo.
+Este proyecto está licenciado bajo **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
+
+### ✅ Puedes:
+- **Compartir** — copiar y redistribuir el material en cualquier medio o formato
+- **Adaptar** — remezclar, transformar y construir sobre el material
+
+### ⚠️ Bajo los siguientes términos:
+- **Atribución** — Debes dar crédito apropiado, proporcionar un enlace a la licencia e indicar si se realizaron cambios
+- **No Comercial** — No puedes usar el material con fines comerciales
+- **Compartir Igual** — Si remezclas, transformas o construyes sobre el material, debes distribuir tus contribuciones bajo la misma licencia
+
+📜 **Licencia completa:** [LICENSE](./LICENSE)  
+🔗 **Más información:** https://creativecommons.org/licenses/by-nc-sa/4.0/
 
 ---
 
 ## 🤝 Contribuciones
 
-Este es un proyecto personal. Si tienes sugerencias o encuentras bugs, contáctame por email.
+¡Las contribuciones son bienvenidas! Si tienes sugerencias, encuentras bugs o quieres agregar funcionalidades:
+
+1. **Fork** el proyecto
+2. Crea una **rama** para tu feature (`git checkout -b feature/AmazingFeature`)
+3. **Commit** tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. **Push** a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un **Pull Request**
+
+**Nota:** Recuerda que cualquier contribución debe respetar la licencia CC BY-NC-SA 4.0 (sin uso comercial).
 
 ---
 

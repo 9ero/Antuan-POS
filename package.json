@@ -1,6 +1,13 @@
 {
   "name": "antuan-pos",
   "version": "1.0.0",
+  "description": "Sistema de punto de venta (POS) móvil para pequeños negocios",
+  "author": "Juan Miguel Fernández Araya <fernandezarayajuanmiguel@gmail.com>",
+  "license": "CC-BY-NC-SA-4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/9ero/Antuan-POS.git"
+  },
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -40,6 +47,5 @@
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "^54.0.9",
     "typescript": "~5.9.2"
-  },
-  "private": true
+  }
 }
