@@ -33,7 +33,18 @@ export default function AdminDashboard() {
                     <Text className="text-2xl text-gray-400">→</Text>
                 </TouchableOpacity>
 
-<TouchableOpacity
+                <TouchableOpacity
+                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex-row items-center justify-between"
+                    onPress={() => router.push('/admin/inventory')}
+                >
+                    <View>
+                        <Text className="text-xl font-bold text-gray-800">Inventario</Text>
+                        <Text className="text-gray-500">Stock, recepciones y extravíos</Text>
+                    </View>
+                    <Text className="text-2xl text-gray-400">→</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                     className="bg-red-50 p-6 rounded-xl border border-red-100 mt-8"
                     onPress={() => router.replace('/')}
                 >

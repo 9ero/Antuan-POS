@@ -69,6 +69,7 @@ export default function AdminLayout() {
             <Stack.Screen name="products/index" options={{ title: 'Productos' }} />
             <Stack.Screen name="users/index" options={{ title: 'Usuarios' }} />
             <Stack.Screen name="pins/index" options={{ title: 'PINs de Compra' }} />
+            <Stack.Screen name="inventory/index" options={{ title: 'Inventario' }} />
         </Stack>
     );
 }

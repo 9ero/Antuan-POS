@@ -49,6 +49,7 @@ export default function POSScreen() {
     const [modalUserSearch, setModalUserSearch] = useState('');
     const [checkoutPin, setCheckoutPin] = useState('');
     const [pinError, setPinError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const normalize = (s: string) =>
         s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -137,6 +138,7 @@ export default function POSScreen() {
             setPinError('Selecciona un cliente');
             return;
         }
+        setIsSubmitting(true);
         const valid = await validatePin(checkoutPin, modalUser.id!);
         if (!valid) {
             const hasPin = await getPinForUser(modalUser.id!);
@@ -145,10 +147,12 @@ export default function POSScreen() {
                     ? 'PIN incorrecto'
                     : `${modalUser.name} no tiene PIN. Generalo desde Admin → Usuarios.`
             );
+            setIsSubmitting(false);
             return;
         }
         setShowCheckoutModal(false);
         const result = await createTransaction(modalUser.id!, cartTotal, cart);
+        setIsSubmitting(false);
         if (result.success) {
             toast.show({
                 placement: 'top',
@@ -203,39 +207,50 @@ export default function POSScreen() {
 
                     <ScrollView flex={1}>
                         <Box flexDirection="row" flexWrap="wrap" gap="$3" pb="$4">
-                            {products.map(product => (
-                                <Pressable
-                                    key={product.id}
-                                    w="48%"
-                                    disabled={product.stock <= 0}
-                                    opacity={product.stock <= 0 ? 0.5 : 1}
-                                    onPress={() => {
-                                        try { addToCart(product); }
-                                        catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
-                                    }}
-                                >
-                                    <Card p="$3" variant="elevated">
-                                        <VStack alignItems="center" space="xs">
-                                            <Box
-                                                w="$10" h="$10"
-                                                bg={product.stock <= 0 ? '$coolGray200' : '$coolGray100'}
-                                                borderRadius="$full"
-                                                alignItems="center"
-                                                justifyContent="center"
-                                            >
-                                                <Text>{product.stock <= 0 ? '❌' : '🛒'}</Text>
-                                            </Box>
-                                            <Text fontWeight="bold" textAlign="center">{product.name}</Text>
-                                            <Text color={product.stock <= 0 ? '$coolGray400' : '$green600'} fontWeight="bold">
-                                                ₡{product.price}
-                                            </Text>
-                                            <Text size="xs" color={product.stock <= 0 ? '$red500' : '$coolGray500'}>
-                                                {product.stock <= 0 ? 'Sin Stock' : `Stock: ${product.stock}`}
-                                            </Text>
-                                        </VStack>
-                                    </Card>
-                                </Pressable>
-                            ))}
+                            {products.map(product => {
+                                const outOfStock = product.stock <= 0;
+                                const lowStock = product.stock > 0 && product.stock <= 5;
+                                return (
+                                    <Pressable
+                                        key={product.id}
+                                        w="48%"
+                                        disabled={outOfStock}
+                                        opacity={outOfStock ? 0.5 : 1}
+                                        onPress={() => {
+                                            try { addToCart(product); }
+                                            catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+                                        }}
+                                    >
+                                        <Card p="$3" variant="elevated">
+                                            <VStack alignItems="center" space="xs">
+                                                <Box
+                                                    w="$10" h="$10"
+                                                    bg={outOfStock ? '$coolGray200' : lowStock ? '$orange100' : '$coolGray100'}
+                                                    borderRadius="$full"
+                                                    alignItems="center"
+                                                    justifyContent="center"
+                                                >
+                                                    <Text>{outOfStock ? '❌' : lowStock ? '⚠️' : '🛒'}</Text>
+                                                </Box>
+                                                <Text fontWeight="bold" textAlign="center">{product.name}</Text>
+                                                <Text
+                                                    color={outOfStock ? '$coolGray400' : '$green600'}
+                                                    fontWeight="bold"
+                                                >
+                                                    ₡{product.price}
+                                                </Text>
+                                                <Text
+                                                    size="xs"
+                                                    color={outOfStock ? '$red500' : lowStock ? '$orange500' : '$coolGray500'}
+                                                    fontWeight={lowStock ? '$semibold' : '$normal'}
+                                                >
+                                                    {outOfStock ? 'Sin Stock' : `Stock: ${product.stock}`}
+                                                </Text>
+                                            </VStack>
+                                        </Card>
+                                    </Pressable>
+                                );
+                            })}
                         </Box>
                     </ScrollView>
                 </Box>
@@ -361,11 +376,11 @@ export default function POSScreen() {
                         <Button
                             size="lg"
                             bg="$green600"
-                            isDisabled={!modalUser || checkoutPin.length !== 4}
+                            isDisabled={!modalUser || checkoutPin.length !== 4 || isSubmitting}
                             onPress={handleConfirm}
                             mb="$2"
                         >
-                            <ButtonText>Confirmar compra</ButtonText>
+                            <ButtonText>{isSubmitting ? 'Procesando...' : 'Confirmar compra'}</ButtonText>
                         </Button>
                         <Button variant="link" onPress={() => setShowCheckoutModal(false)}>
                             <ButtonText color="$coolGray400">Cancelar</ButtonText>

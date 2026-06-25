@@ -92,8 +92,11 @@ export const createTransaction = async (userId: number, total: number, items: Ca
                 transactionId, item.id!, item.price, item.quantity
             );
 
-            // Decrement Stock
             await dbResult.runAsync('UPDATE products SET stock = stock - ? WHERE id = ?', item.quantity, item.id!);
+            await dbResult.runAsync(
+                'INSERT INTO stock_movements (product_id, quantity_change, reason) VALUES (?, ?, ?)',
+                item.id!, -item.quantity, 'venta'
+            );
         }
 
         await dbResult.execAsync('COMMIT');
@@ -105,6 +108,57 @@ export const createTransaction = async (userId: number, total: number, items: Ca
     }
 }
 
+
+// Stock Movements
+export interface StockMovement {
+    id: number;
+    product_id: number;
+    quantity_change: number;
+    reason: string;
+    created_at: string;
+}
+
+export const getStockMovements = async (productId: number): Promise<StockMovement[]> => {
+    return await dbResult.getAllAsync<StockMovement>(
+        'SELECT * FROM stock_movements WHERE product_id = ? ORDER BY created_at DESC LIMIT 30',
+        productId
+    );
+};
+
+export const addStock = async (productId: number, quantity: number, reason: 'recepcion' | 'ajuste' = 'recepcion') => {
+    try {
+        await dbResult.execAsync('BEGIN TRANSACTION');
+        await dbResult.runAsync('UPDATE products SET stock = stock + ? WHERE id = ?', quantity, productId);
+        await dbResult.runAsync(
+            'INSERT INTO stock_movements (product_id, quantity_change, reason) VALUES (?, ?, ?)',
+            productId, quantity, reason
+        );
+        await dbResult.execAsync('COMMIT');
+        return { success: true };
+    } catch (e) {
+        await dbResult.execAsync('ROLLBACK');
+        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
+    }
+};
+
+export const registerLoss = async (productId: number, quantity: number) => {
+    try {
+        await dbResult.execAsync('BEGIN TRANSACTION');
+        const product = await dbResult.getFirstAsync<Product>('SELECT stock FROM products WHERE id = ?', productId);
+        if (!product) throw new Error('Producto no encontrado');
+        if (product.stock < quantity) throw new Error(`Stock insuficiente. Disponible: ${product.stock}`);
+        await dbResult.runAsync('UPDATE products SET stock = stock - ? WHERE id = ?', quantity, productId);
+        await dbResult.runAsync(
+            'INSERT INTO stock_movements (product_id, quantity_change, reason) VALUES (?, ?, ?)',
+            productId, -quantity, 'extravio'
+        );
+        await dbResult.execAsync('COMMIT');
+        return { success: true };
+    } catch (e) {
+        await dbResult.execAsync('ROLLBACK');
+        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
+    }
+};
 
 // Checkout PINs
 export interface CheckoutPin {
