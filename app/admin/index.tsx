@@ -33,7 +33,7 @@ export default function AdminDashboard() {
                     <Text className="text-2xl text-gray-400">→</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+<TouchableOpacity
                     className="bg-red-50 p-6 rounded-xl border border-red-100 mt-8"
                     onPress={() => router.replace('/')}
                 >

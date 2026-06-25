@@ -106,6 +106,50 @@ export const createTransaction = async (userId: number, total: number, items: Ca
 }
 
 
+// Checkout PINs
+export interface CheckoutPin {
+    id: number;
+    pin: string;
+    user_id: number;
+    user_name?: string;
+    created_at: string;
+}
+
+export const getPinsWithUsers = async (): Promise<CheckoutPin[]> => {
+    return await dbResult.getAllAsync<CheckoutPin>(`
+        SELECT cp.*, u.name as user_name
+        FROM checkout_pins cp
+        JOIN users u ON cp.user_id = u.id
+        ORDER BY u.name ASC
+    `);
+};
+
+export const getPinForUser = async (userId: number): Promise<CheckoutPin | null> => {
+    return await dbResult.getFirstAsync<CheckoutPin>(
+        'SELECT * FROM checkout_pins WHERE user_id = ?', userId
+    );
+};
+
+export const createCheckoutPin = async (pin: string, userId: number) => {
+    await dbResult.runAsync('DELETE FROM checkout_pins WHERE user_id = ?', userId);
+    return await dbResult.runAsync(
+        'INSERT INTO checkout_pins (pin, user_id) VALUES (?, ?)',
+        pin.toUpperCase(), userId
+    );
+};
+
+export const validatePin = async (pin: string, userId: number): Promise<boolean> => {
+    const existing = await dbResult.getFirstAsync<CheckoutPin>(
+        'SELECT * FROM checkout_pins WHERE pin = ? AND user_id = ?',
+        pin.toUpperCase(), userId
+    );
+    return !!existing;
+};
+
+export const deleteCheckoutPin = async (userId: number) => {
+    return await dbResult.runAsync('DELETE FROM checkout_pins WHERE user_id = ?', userId);
+};
+
 export const deleteAllTransactions = async () => {
     try {
         await dbResult.execAsync('BEGIN TRANSACTION');

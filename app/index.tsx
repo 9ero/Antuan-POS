@@ -1,5 +1,5 @@
 import { Modal, StyleSheet } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
@@ -25,58 +25,61 @@ import {
     ToastDescription,
     Icon,
     AddIcon,
-    RemoveIcon
+    RemoveIcon,
 } from '@gluestack-ui/themed';
 
 import { useCart } from '@/hooks/useCart';
 import { useProductSearch } from '@/hooks/useProductSearch';
 import { useScanner } from '@/hooks/useScanner';
-import { createTransaction } from '@/db/queries';
+import { createTransaction, validatePin, getPinForUser } from '@/db/queries';
 import { User, Product } from '@/db/schemas';
 
 export default function POSScreen() {
-    const router = useRouter();
     const toast = useToast();
 
-    // Hooks
     const { cart, addToCart, updateQuantity, clearCart, cartTotal } = useCart();
     const { users, products, refresh } = useProductSearch();
     const { isScanning, startScanning, stopScanning } = useScanner();
 
-    // UI State
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [userSearch, setUserSearch] = useState('');
     const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
 
-    // Scanner Handler
-    const handleBarCodeScanned = async ({ data }: { data: string }) => {
-        // Prevent multiple scans of the same item instantly if modal is open
-        if (scannedProduct) return;
+    // Checkout modal state
+    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+    const [modalUser, setModalUser] = useState<User | null>(null);
+    const [modalUserSearch, setModalUserSearch] = useState('');
+    const [checkoutPin, setCheckoutPin] = useState('');
+    const [pinError, setPinError] = useState('');
 
+    const normalize = (s: string) =>
+        s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+    const filteredModalUsers = users.filter(u =>
+        normalize(u.name).includes(normalize(modalUserSearch))
+    );
+
+    // Scanner
+    const handleBarCodeScanned = async ({ data }: { data: string }) => {
+        if (scannedProduct) return;
         const product = products.find(p => p.barcode === data);
         if (product) {
-            // Strict Stock Validation
             if (product.stock <= 0) {
                 toast.show({
-                    placement: "top",
+                    placement: 'top',
                     render: ({ id }) => (
                         <Toast nativeID={'toast-' + id} action="error" variant="solid">
                             <VStack space="xs">
                                 <ToastTitle>Stock Agotado</ToastTitle>
-                                <ToastDescription>El producto {product.name} no tiene existencias.</ToastDescription>
+                                <ToastDescription>{product.name} no tiene existencias.</ToastDescription>
                             </VStack>
                         </Toast>
-                    )
+                    ),
                 });
                 return;
             }
-
-            // Found and valid -> Show Confirmation
             setScannedProduct(product);
-
         } else {
             toast.show({
-                placement: "top",
+                placement: 'top',
                 render: ({ id }) => (
                     <Toast nativeID={'toast-' + id} action="error" variant="solid">
                         <VStack space="xs">
@@ -84,95 +87,98 @@ export default function POSScreen() {
                             <ToastDescription>Código {data} no existe</ToastDescription>
                         </VStack>
                     </Toast>
-                )
+                ),
             });
         }
     };
 
     const confirmScannedProduct = () => {
-        if (scannedProduct) {
-            try {
-                addToCart(scannedProduct);
-                toast.show({
-                    placement: "top",
-                    render: ({ id }) => (
-                        <Toast nativeID={'toast-' + id} action="success" variant="solid">
-                            <VStack space="xs">
-                                <ToastTitle>Producto Agregado</ToastTitle>
-                                <ToastDescription>{scannedProduct.name}</ToastDescription>
-                            </VStack>
-                        </Toast>
-                    )
-                });
-            } catch (e) {
-                toast.show({
-                    placement: "top",
-                    render: ({ id }) => (
-                        <Toast nativeID={'toast-' + id} action="error" variant="solid">
-                            <VStack space="xs">
-                                <ToastTitle>Error</ToastTitle>
-                                <ToastDescription>{e instanceof Error ? e.message : 'Stock insuficiente'}</ToastDescription>
-                            </VStack>
-                        </Toast>
-                    )
-                });
-            }
-            // Keep camera open, just clear selection
-            setScannedProduct(null);
-        }
-    };
-
-    // Checkout Logic
-    const handleCheckout = async () => {
-        if (!selectedUser) {
+        if (!scannedProduct) return;
+        try {
+            addToCart(scannedProduct);
             toast.show({
-                placement: "top",
-                render: ({ id }) => (
-                    <Toast nativeID={'toast-' + id} action="error" variant="accent">
-                        <ToastTitle>Seleccione Usuario</ToastTitle>
-                    </Toast>
-                )
-            });
-            return;
-        }
-
-        const result = await createTransaction(selectedUser.id!, cartTotal, cart);
-        if (result.success) {
-            toast.show({
-                placement: "top",
+                placement: 'top',
                 render: ({ id }) => (
                     <Toast nativeID={'toast-' + id} action="success" variant="solid">
-                        <ToastTitle>Venta Exitosa</ToastTitle>
+                        <VStack space="xs">
+                            <ToastTitle>Agregado</ToastTitle>
+                            <ToastDescription>{scannedProduct.name}</ToastDescription>
+                        </VStack>
                     </Toast>
-                )
+                ),
+            });
+        } catch (e) {
+            toast.show({
+                placement: 'top',
+                render: ({ id }) => (
+                    <Toast nativeID={'toast-' + id} action="error" variant="solid">
+                        <VStack space="xs">
+                            <ToastTitle>Error</ToastTitle>
+                            <ToastDescription>{e instanceof Error ? e.message : 'Stock insuficiente'}</ToastDescription>
+                        </VStack>
+                    </Toast>
+                ),
+            });
+        }
+        setScannedProduct(null);
+    };
+
+    // Checkout
+    const openCheckoutModal = () => {
+        setModalUser(null);
+        setModalUserSearch('');
+        setCheckoutPin('');
+        setPinError('');
+        setShowCheckoutModal(true);
+    };
+
+    const handleConfirm = async () => {
+        if (!modalUser) {
+            setPinError('Selecciona un cliente');
+            return;
+        }
+        const valid = await validatePin(checkoutPin, modalUser.id!);
+        if (!valid) {
+            const hasPin = await getPinForUser(modalUser.id!);
+            setPinError(
+                hasPin
+                    ? 'PIN incorrecto'
+                    : `${modalUser.name} no tiene PIN. Generalo desde Admin → Usuarios.`
+            );
+            return;
+        }
+        setShowCheckoutModal(false);
+        const result = await createTransaction(modalUser.id!, cartTotal, cart);
+        if (result.success) {
+            toast.show({
+                placement: 'top',
+                render: ({ id }) => (
+                    <Toast nativeID={'toast-' + id} action="success" variant="solid">
+                        <ToastTitle>¡Venta Exitosa!</ToastTitle>
+                    </Toast>
+                ),
             });
             clearCart();
-            setSelectedUser(null);
-            setUserSearch('');
             refresh();
         } else {
             toast.show({
-                placement: "top",
+                placement: 'top',
                 render: ({ id }) => (
                     <Toast nativeID={'toast-' + id} action="error" variant="solid">
                         <ToastTitle>Error</ToastTitle>
                         <ToastDescription>{result.error}</ToastDescription>
                     </Toast>
-                )
+                ),
             });
         }
     };
 
-    const filteredUsers = users.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()));
-
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
-            {/* Main Content - Vertical Layout */}
             <Box flex={1} flexDirection="column">
 
-                {/* TOP: Products, Search, User */}
+                {/* TOP: Products */}
                 <Box flex={2} p="$4">
-                    {/* Header Links */}
                     <HStack justifyContent="space-between" mb="$4" alignItems="center">
                         <Heading size="xl" color="$purple600">Antuan POS</Heading>
                         <HStack space="md">
@@ -189,53 +195,12 @@ export default function POSScreen() {
                         </HStack>
                     </HStack>
 
-                    {/* User Select */}
-                    <Box mb="$4" zIndex={10}>
-                        {selectedUser ? (
-                            <Card p="$3" variant="filled" className="bg-blue-50 border-blue-200">
-                                <HStack justifyContent="space-between" alignItems="center">
-                                    <VStack>
-                                        <Text size="xs" color="$coolGray500">Cliente</Text>
-                                        <Heading size="md" color="$blue800">{selectedUser.name}</Heading>
-                                    </VStack>
-                                    <Button variant="link" onPress={() => setSelectedUser(null)}>
-                                        {/* @ts-ignore */}
-                                        <ButtonIcon as={Ionicons} name="close-circle" size={24} color="#1e40af" />
-                                    </Button>
-                                </HStack>
-                            </Card>
-                        ) : (
-                            <Box>
-                                <Input>
-                                    <InputField
-                                        placeholder="Buscar cliente..."
-                                        value={userSearch}
-                                        onChangeText={setUserSearch}
-                                    />
-                                </Input>
-                                {userSearch.length > 0 && (
-                                    <Box position="absolute" top="$12" left={0} right={0} bg="$white" shadowColor="$black" shadowOffset={{ width: 0, height: 2 }} shadowOpacity={0.2} shadowRadius={4} elevation={5} borderRadius="$md" maxHeight={200} overflow="hidden" zIndex={20}>
-                                        <ScrollView keyboardShouldPersistTaps="handled">
-                                            {filteredUsers.map(u => (
-                                                <Pressable key={u.id} p="$3" borderBottomWidth={1} borderColor="$coolGray100" $active-bg="$coolGray100" onPress={() => { setSelectedUser(u); setUserSearch(''); }}>
-                                                    <Text>{u.name}</Text>
-                                                </Pressable>
-                                            ))}
-                                        </ScrollView>
-                                    </Box>
-                                )}
-                            </Box>
-                        )}
-                    </Box>
-
-                    {/* Scanner Button */}
                     <Button onPress={startScanning} mb="$4" bg="$purple600">
                         {/* @ts-ignore */}
                         <ButtonIcon as={Ionicons} name="qr-code-outline" mr="$2" />
                         <ButtonText>Escanear Producto</ButtonText>
                     </Button>
 
-                    {/* Products Grid */}
                     <ScrollView flex={1}>
                         <Box flexDirection="row" flexWrap="wrap" gap="$3" pb="$4">
                             {products.map(product => (
@@ -245,18 +210,25 @@ export default function POSScreen() {
                                     disabled={product.stock <= 0}
                                     opacity={product.stock <= 0 ? 0.5 : 1}
                                     onPress={() => {
-                                        try { addToCart(product); } catch (e) {
-                                            alert(e instanceof Error ? e.message : 'Error');
-                                        }
+                                        try { addToCart(product); }
+                                        catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
                                     }}
                                 >
                                     <Card p="$3" variant="elevated">
                                         <VStack alignItems="center" space="xs">
-                                            <Box w="$10" h="$10" bg={product.stock <= 0 ? '$coolGray200' : '$coolGray100'} borderRadius="$full" alignItems="center" justifyContent="center">
+                                            <Box
+                                                w="$10" h="$10"
+                                                bg={product.stock <= 0 ? '$coolGray200' : '$coolGray100'}
+                                                borderRadius="$full"
+                                                alignItems="center"
+                                                justifyContent="center"
+                                            >
                                                 <Text>{product.stock <= 0 ? '❌' : '🛒'}</Text>
                                             </Box>
                                             <Text fontWeight="bold" textAlign="center">{product.name}</Text>
-                                            <Text color={product.stock <= 0 ? '$coolGray400' : '$green600'} fontWeight="bold">₡{product.price}</Text>
+                                            <Text color={product.stock <= 0 ? '$coolGray400' : '$green600'} fontWeight="bold">
+                                                ₡{product.price}
+                                            </Text>
                                             <Text size="xs" color={product.stock <= 0 ? '$red500' : '$coolGray500'}>
                                                 {product.stock <= 0 ? 'Sin Stock' : `Stock: ${product.stock}`}
                                             </Text>
@@ -269,8 +241,15 @@ export default function POSScreen() {
                 </Box>
 
                 {/* BOTTOM: Cart */}
-                <Box flex={1} bg="$white" p="$4" borderTopWidth={1} borderColor="$coolGray200" shadowColor="$black" shadowOffset={{ width: 0, height: -2 }} shadowOpacity={0.1} shadowRadius={4} elevation={10}>
-                    <Heading size="md" mb="$2">Carrito ({cart.reduce((a, b) => a + b.quantity, 0)})</Heading>
+                <Box
+                    flex={1} bg="$white" p="$4"
+                    borderTopWidth={1} borderColor="$coolGray200"
+                    shadowColor="$black" shadowOffset={{ width: 0, height: -2 }}
+                    shadowOpacity={0.1} shadowRadius={4} elevation={10}
+                >
+                    <Heading size="md" mb="$2">
+                        Carrito ({cart.reduce((a, b) => a + b.quantity, 0)})
+                    </Heading>
 
                     <ScrollView flex={1}>
                         <VStack space="sm">
@@ -303,14 +282,97 @@ export default function POSScreen() {
 
                     <Button
                         size="xl"
-                        isDisabled={!selectedUser || cart.length === 0}
-                        bg={!selectedUser || cart.length === 0 ? '$coolGray300' : '$green600'}
-                        onPress={handleCheckout}
+                        isDisabled={cart.length === 0}
+                        bg={cart.length === 0 ? '$coolGray300' : '$green600'}
+                        onPress={openCheckoutModal}
                     >
                         <ButtonText>Cobrar</ButtonText>
                     </Button>
                 </Box>
             </Box>
+
+            {/* Checkout Modal: user selector + PIN */}
+            <Modal visible={showCheckoutModal} animationType="slide" transparent>
+                <Box flex={1} justifyContent="flex-end" bg="rgba(0,0,0,0.5)">
+                    <Box bg="$white" borderTopLeftRadius="$3xl" borderTopRightRadius="$3xl" p="$6" maxHeight="85%">
+                        <Heading size="lg" mb="$1">Confirmar Compra</Heading>
+                        <Text color="$coolGray500" mb="$4">
+                            Total: <Text fontWeight="$bold" color="$green700" size="lg">₡{cartTotal}</Text>
+                        </Text>
+
+                        {/* User selector */}
+                        <Text size="sm" fontWeight="$semibold" mb="$2">¿Quién eres?</Text>
+                        {modalUser ? (
+                            <HStack
+                                bg="$blue50" borderRadius="$lg" borderWidth={1} borderColor="$blue200"
+                                px="$3" py="$2" mb="$4" justifyContent="space-between" alignItems="center"
+                            >
+                                <Text fontWeight="$bold" color="$blue800">{modalUser.name}</Text>
+                                <Pressable onPress={() => { setModalUser(null); setModalUserSearch(''); setPinError(''); }}>
+                                    <Text color="$blue500" size="sm">Cambiar</Text>
+                                </Pressable>
+                            </HStack>
+                        ) : (
+                            <Box mb="$4">
+                                <Input mb="$2">
+                                    <InputField
+                                        placeholder="Escribe 3 letras para buscar..."
+                                        value={modalUserSearch}
+                                        onChangeText={setModalUserSearch}
+                                    />
+                                </Input>
+                                {modalUserSearch.length >= 3 && (
+                                    <ScrollView style={{ maxHeight: 160 }} keyboardShouldPersistTaps="handled">
+                                        {filteredModalUsers.length > 0 ? filteredModalUsers.map(u => (
+                                            <Pressable
+                                                key={u.id}
+                                                py="$2" px="$1"
+                                                borderBottomWidth={1} borderColor="$coolGray100"
+                                                onPress={() => { setModalUser(u); setModalUserSearch(''); setPinError(''); }}
+                                            >
+                                                <Text>{u.name}</Text>
+                                            </Pressable>
+                                        )) : (
+                                            <Text size="sm" color="$coolGray400" px="$1">Sin resultados</Text>
+                                        )}
+                                    </ScrollView>
+                                )}
+                            </Box>
+                        )}
+
+                        {/* PIN input */}
+                        <Text size="sm" fontWeight="$semibold" mb="$2">Tu PIN de 4 caracteres</Text>
+                        <Input size="xl" mb="$1">
+                            <InputField
+                                value={checkoutPin}
+                                onChangeText={t => { setCheckoutPin(t.toUpperCase()); setPinError(''); }}
+                                maxLength={4}
+                                autoCapitalize="characters"
+                                textAlign="center"
+                                placeholder="· · · ·"
+                            />
+                        </Input>
+                        {pinError ? (
+                            <Text size="sm" color="$red500" mb="$3">{pinError}</Text>
+                        ) : (
+                            <Box mb="$3" />
+                        )}
+
+                        <Button
+                            size="lg"
+                            bg="$green600"
+                            isDisabled={!modalUser || checkoutPin.length !== 4}
+                            onPress={handleConfirm}
+                            mb="$2"
+                        >
+                            <ButtonText>Confirmar compra</ButtonText>
+                        </Button>
+                        <Button variant="link" onPress={() => setShowCheckoutModal(false)}>
+                            <ButtonText color="$coolGray400">Cancelar</ButtonText>
+                        </Button>
+                    </Box>
+                </Box>
+            </Modal>
 
             {/* Camera Modal */}
             <Modal visible={isScanning} animationType="slide" presentationStyle="pageSheet">
@@ -326,7 +388,6 @@ export default function POSScreen() {
                         </Button>
                     </Box>
 
-                    {/* Confirmation Overlay */}
                     {scannedProduct && (
                         <Box position="absolute" top={0} left={0} right={0} bottom={0} justifyContent="center" alignItems="center" bg="rgba(0,0,0,0.7)">
                             <Card p="$5" w="90%" variant="elevated">
@@ -334,7 +395,6 @@ export default function POSScreen() {
                                     <Heading size="lg" textAlign="center">{scannedProduct.name}</Heading>
                                     <Text size="xl" color="$green600" fontWeight="bold">₡{scannedProduct.price}</Text>
                                     <Text color="$coolGray500">Stock: {scannedProduct.stock}</Text>
-
                                     <HStack space="md" mt="$4" w="100%" justifyContent="center">
                                         <Button onPress={() => setScannedProduct(null)} variant="outline" action="secondary" flex={1}>
                                             <ButtonText>Cancelar</ButtonText>

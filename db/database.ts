@@ -40,6 +40,13 @@ export const initDatabase = async () => {
                 FOREIGN KEY (transaction_id) REFERENCES transactions (id),
                 FOREIGN KEY (product_id) REFERENCES products (id)
             );
+
+            CREATE TABLE IF NOT EXISTS checkout_pins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pin TEXT NOT NULL UNIQUE,
+                is_used INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         `);
 
         // Migration for existing databases
@@ -57,6 +64,14 @@ export const initDatabase = async () => {
         } catch (e) {
             if (e instanceof Error && !e.message.includes('duplicate column name')) {
                 // console.log('Migration error:', e);
+            }
+        }
+
+        try {
+            await dbResult.execAsync('ALTER TABLE checkout_pins ADD COLUMN user_id INTEGER REFERENCES users(id);');
+        } catch (e) {
+            if (e instanceof Error && !e.message.includes('duplicate column name')) {
+                console.log('Migration error:', e);
             }
         }
 
