@@ -60,6 +60,22 @@ export const initDatabase = async () => {
             }
         }
 
+        try {
+            await dbResult.execAsync('ALTER TABLE products ADD COLUMN cost_price REAL DEFAULT 0;');
+        } catch (e) {
+            if (e instanceof Error && !e.message.includes('duplicate column name')) {
+                console.log('Migration error:', e);
+            }
+        }
+
+        try {
+            await dbResult.execAsync('ALTER TABLE products ADD COLUMN margin_percentage INTEGER DEFAULT 30;');
+        } catch (e) {
+            if (e instanceof Error && !e.message.includes('duplicate column name')) {
+                console.log('Migration error:', e);
+            }
+        }
+
         console.log('Database initialized successfully');
     } catch (error) {
         console.error('Error initializing database:', error);

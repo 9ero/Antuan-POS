@@ -25,31 +25,42 @@ export const getProducts = async (): Promise<Product[]> => {
     return await dbResult.getAllAsync('SELECT * FROM products WHERE is_active = 1 ORDER BY name ASC');
 };
 
-export const addProduct = async (name: string, price: number, barcode: string = '', stock: number = 0) => {
+export const addProduct = async (
+    name: string, price: number, barcode: string = '', stock: number = 0,
+    costPrice: number = 0, marginPercentage: number = 30
+) => {
     if (barcode) {
         const existing = await getProductByBarcode(barcode);
         if (existing) {
             if (existing.is_active === 0) {
-                // Reactivate and update
                 return await dbResult.runAsync(
-                    'UPDATE products SET name = ?, price = ?, stock = ?, is_active = 1 WHERE id = ?',
-                    name, price, stock, existing.id!
+                    'UPDATE products SET name = ?, price = ?, stock = ?, cost_price = ?, margin_percentage = ?, is_active = 1 WHERE id = ?',
+                    name, price, stock, costPrice, marginPercentage, existing.id!
                 );
             }
             throw new Error(`El código de barras "${barcode}" ya está registrado.`);
         }
     }
-    return await dbResult.runAsync('INSERT INTO products (name, price, barcode, stock, is_active) VALUES (?, ?, ?, ?, 1)', name, price, barcode, stock);
+    return await dbResult.runAsync(
+        'INSERT INTO products (name, price, barcode, stock, is_active, cost_price, margin_percentage) VALUES (?, ?, ?, ?, 1, ?, ?)',
+        name, price, barcode, stock, costPrice, marginPercentage
+    );
 };
 
-export const updateProduct = async (id: number, name: string, price: number, barcode: string, stock: number) => {
+export const updateProduct = async (
+    id: number, name: string, price: number, barcode: string, stock: number,
+    costPrice: number = 0, marginPercentage: number = 30
+) => {
     if (barcode) {
         const existing = await getProductByBarcode(barcode);
         if (existing && existing.id !== id) {
             throw new Error(`El código de barras "${barcode}" ya pertenece a otro producto.`);
         }
     }
-    return await dbResult.runAsync('UPDATE products SET name = ?, price = ?, barcode = ?, stock = ? WHERE id = ?', name, price, barcode, stock, id);
+    return await dbResult.runAsync(
+        'UPDATE products SET name = ?, price = ?, barcode = ?, stock = ?, cost_price = ?, margin_percentage = ? WHERE id = ?',
+        name, price, barcode, stock, costPrice, marginPercentage, id
+    );
 };
 
 export const deleteProduct = async (id: number) => {
@@ -125,6 +136,7 @@ export interface TransactionDetail {
 export const getTransactions = async (): Promise<TransactionDetail[]> => {
     const rows = await dbResult.getAllAsync<{
         transaction_id: number;
+        user_id: number;
         total: number;
         created_at: string;
         user_name: string;
@@ -132,16 +144,17 @@ export const getTransactions = async (): Promise<TransactionDetail[]> => {
         quantity: number;
         price_at_purchase: number;
     }>(`
-        SELECT 
-            t.id as transaction_id, 
-            t.total, 
-            t.created_at, 
+        SELECT
+            t.id as transaction_id,
+            t.user_id,
+            t.total,
+            t.created_at,
             u.name as user_name,
             p.name as product_name,
             ti.quantity,
             ti.price_at_purchase
-        FROM transactions t 
-        JOIN users u ON t.user_id = u.id 
+        FROM transactions t
+        JOIN users u ON t.user_id = u.id
         JOIN transaction_items ti ON t.id = ti.transaction_id
         JOIN products p ON ti.product_id = p.id
         ORDER BY t.created_at DESC
@@ -153,7 +166,7 @@ export const getTransactions = async (): Promise<TransactionDetail[]> => {
         if (!transactionsMap.has(row.transaction_id)) {
             transactionsMap.set(row.transaction_id, {
                 id: row.transaction_id,
-                user_id: 0,
+                user_id: row.user_id,
                 total: row.total,
                 items: [],
                 created_at: row.created_at,

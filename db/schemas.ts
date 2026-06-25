@@ -10,6 +10,8 @@ export const ProductSchema = z.object({
     id: z.number().optional(),
     name: z.string().min(1, "El nombre del producto es requerido"),
     price: z.number().nonnegative("El precio no puede ser negativo"),
+    cost_price: z.number().nonnegative().default(0),
+    margin_percentage: z.number().int().default(30),
     barcode: z.string().optional(),
     stock: z.number().int().nonnegative("El stock no puede ser negativo").default(0),
     is_active: z.number().optional(),
