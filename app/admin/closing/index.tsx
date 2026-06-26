@@ -51,7 +51,7 @@ function autoFitCols(ws: XLSX.WorkSheet): void {
     }
     ws['!cols'] = cols;
 }
-const fmtDate = (d: string) => new Date(d).toLocaleString('es-CR', {
+const fmtDate = (d: string) => new Date(d.includes('T') ? d : d.replace(' ', 'T') + 'Z').toLocaleString('es-CR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
 });
@@ -346,30 +346,34 @@ export default function CashClosingScreen() {
     useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
 
     const handleClose = async () => {
+        if (isSubmitting) return;
         setIsSubmitting(true);
-        const closedAt = new Date().toISOString();
-        const s = await buildClosingSummary(periodStart, closedAt);
-        await createCashClosing(periodStart, closedAt, s.totalRevenue, JSON.stringify(s));
-        setShowConfirmModal(false);
-        setIsSubmitting(false);
-        await exportExcel(s);
-        setExpandedUserKey(null);
-        setExpandedClosingId(null);
-        setExpandedHistorySummary(null);
-        loadAll();
+        try {
+            const closedAt = new Date().toISOString();
+            const s = await buildClosingSummary(periodStart, closedAt);
+            await createCashClosing(periodStart, closedAt, s.totalRevenue, JSON.stringify(s));
+            setShowConfirmModal(false);
+            await exportExcel(s);
+            setExpandedUserKey(null);
+            setExpandedClosingId(null);
+            setExpandedHistorySummary(null);
+            loadAll();
 
-        // Push to Turso in background — don't block the UI
-        if (isConfigured) {
-            setSyncStatus('syncing');
-            getDeviceConfig().then(cfg => {
-                if (!cfg) return;
-                return pushClosingToTurso(cfg.deviceId, periodStart, closedAt, s.totalRevenue, JSON.stringify(s));
-            }).then(() => {
-                setSyncStatus('ok');
-                setLastSync(new Date().toISOString());
-            }).catch(() => {
-                setSyncStatus('error');
-            });
+            // Push to Turso in background — don't block the UI
+            if (isConfigured) {
+                setSyncStatus('syncing');
+                getDeviceConfig().then(cfg => {
+                    if (!cfg) return;
+                    return pushClosingToTurso(cfg.deviceId, periodStart, closedAt, s.totalRevenue, JSON.stringify(s));
+                }).then(() => {
+                    setSyncStatus('ok');
+                    setLastSync(new Date().toISOString());
+                }).catch(() => {
+                    setSyncStatus('error');
+                });
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 

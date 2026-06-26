@@ -17,7 +17,19 @@ POS móvil offline-first para tienda pequeña en Costa Rica. El **comprador** (n
 - Moneda: colones costarricenses (₡). Moneda mínima = ₡5 → precios siempre redondeados: `Math.round(cost * (1 + margin/100) / 5) * 5`
 - Los PINs de checkout están **ligados a un usuario específico** y son **reutilizables** (no se consumen al usarse). Un mismo PIN puede ser usado por varias personas si el admin lo comparte.
 - Búsqueda accent-insensitive: `s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()`
-- Siempre usar `isSubmitting` state en botones de confirmación de formularios para prevenir doble registro por doble tap.
+- Patrón completo para prevenir doble registro por doble tap en formularios:
+  ```ts
+  const handleSubmit = async () => {
+      if (isSubmitting) return;        // guarda síncrona antes del setState
+      setIsSubmitting(true);
+      try {
+          // lógica de negocio
+      } finally {
+          setIsSubmitting(false);      // siempre se resetea, incluso si hay error
+      }
+  };
+  ```
+  Solo `isDisabled={isSubmitting}` no es suficiente — el re-render puede llegar tarde y un segundo tap escapa.
 - Hacer commits solo después de que el usuario pruebe y apruebe los cambios.
 
 ## Estructura de archivos clave
@@ -43,8 +55,8 @@ db/
                        pushStockMovementToTurso, restoreFromTurso, cola offline pending_sync
 utils/
   pin.ts             — generatePin() sin caracteres ambiguos (sin O/0/I/1)
-.env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN (gitignored)
-.env.example         — Plantilla de credenciales (commiteado)
+.env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN (gitignored, NO tocar .env.example)
+.env.example         — Plantilla de credenciales con placeholders (commiteado, solo para referencia)
 ```
 
 ## Schema de DB local (expo-sqlite, WAL mode)
@@ -77,7 +89,7 @@ En UI se usa **faltante/s** (no "extravío"). El valor en DB sigue siendo `reaso
 - Excel 4 hojas: Resumen, Por Cliente, Por Producto, Estadísticas — solo se genera al confirmar cierre
 - **No hay botón "Exportar Excel" en el período abierto** — el Excel es exclusivo del cierre confirmado para evitar duplicados con el reporte oficial
 - Historial de cierres anteriores con botones Compartir (texto) y Excel
-- `isSubmitting` en botón de confirmación de cierre
+- `handleClose` usa patrón completo `if (isSubmitting) return` + `try/finally` para evitar doble registro
 
 ## Fechas y timezone
 SQLite `CURRENT_TIMESTAMP` guarda UTC como `'YYYY-MM-DD HH:MM:SS'` (sin Z). JavaScript lo parsea como hora local, causando desfase de 6 h en Costa Rica (UTC-6).
@@ -89,6 +101,12 @@ WHERE datetime(t.created_at) >= datetime(?) AND datetime(t.created_at) < datetim
 Helper `toISO(s)` normaliza strings SQLite a ISO antes de pasarlos a `new Date()` en JS.
 
 **En JS (filtros client-side):** usar `toUTC(s)` solo cuando se compara fecha SQLite contra ISO string. Filtros SQLite vs SQLite (Hoy/Semana/Mes) no necesitan corrección porque el desfase se cancela en ambos lados.
+
+**En UI (display de fechas SQLite):** cualquier `fmtDate` o `new Date()` que reciba un string de SQLite debe normalizarlo primero:
+```ts
+new Date(d.includes('T') ? d : d.replace(' ', 'T') + 'Z')
+```
+Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vienen de `new Date().toISOString()` en JS (como `opened_at`, `closed_at`) ya tienen `T` y `Z` y no necesitan normalización.
 
 ## Feature 7 — Turso backup/restore
 
