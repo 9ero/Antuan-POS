@@ -91,29 +91,31 @@ export default function InventoryAdmin() {
     const handleConfirm = async () => {
         const qty = parseInt(qtyInput);
         if (!qty || qty <= 0) { setModalError('Ingresa una cantidad válida'); return; }
-
+        if (isSubmitting) return;
         setIsSubmitting(true);
-        const result = modalMode === 'recepcion'
-            ? await addStock(modalProductId!, qty)
-            : await registerLoss(modalProductId!, qty);
-        setIsSubmitting(false);
-
-        if (result.success && result.movementId) {
-            if (isConfigured) {
-                getDeviceConfig().then(cfg => {
-                    if (cfg) pushStockMovementToTurso(cfg.deviceId, result.movementId!).catch(() => {});
-                });
+        try {
+            const result = modalMode === 'recepcion'
+                ? await addStock(modalProductId!, qty)
+                : await registerLoss(modalProductId!, qty);
+            if (result.success && result.movementId) {
+                if (isConfigured) {
+                    getDeviceConfig().then(cfg => {
+                        if (cfg) pushStockMovementToTurso(cfg.deviceId, result.movementId!).catch(() => {});
+                    });
+                }
             }
-        }
-        if (result.success) {
-            setModalProductId(null);
-            if (expandedId === modalProductId) {
-                const data = await getStockMovements(modalProductId!);
-                setMovements(data);
+            if (result.success) {
+                setModalProductId(null);
+                if (expandedId === modalProductId) {
+                    const data = await getStockMovements(modalProductId!);
+                    setMovements(data);
+                }
+                loadProducts();
+            } else {
+                setModalError(result.error ?? 'Error desconocido');
             }
-            loadProducts();
-        } else {
-            setModalError(result.error ?? 'Error desconocido');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 

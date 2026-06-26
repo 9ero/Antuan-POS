@@ -46,6 +46,7 @@ export default function ProductsAdmin() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [errorModalVisible, setErrorModalVisible] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { isScanning, startScanning, stopScanning } = useScanner();
 
@@ -69,6 +70,8 @@ export default function ProductsAdmin() {
     const handleAdd = async () => {
         if (!newProduct.name) { showError('El nombre es requerido'); return; }
         if (!hasCost && !newProduct.price) { showError('Ingresa el precio de costo o el precio de venta'); return; }
+        if (isSubmitting) return;
+        setIsSubmitting(true);
 
         const finalPrice = hasCost
             ? calcSellPrice(parseFloat(newProduct.cost_price), newProduct.margin_percentage)
@@ -102,6 +105,8 @@ export default function ProductsAdmin() {
             loadProducts();
         } catch (error) {
             showError(error instanceof Error ? error.message : 'Error al guardar producto');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -288,8 +293,8 @@ export default function ProductsAdmin() {
                             </HStack>
                         </VStack>
 
-                        <Button onPress={handleAdd} size="lg" mb="$2">
-                            <ButtonText>Guardar</ButtonText>
+                        <Button onPress={handleAdd} size="lg" mb="$2" isDisabled={isSubmitting}>
+                            <ButtonText>{isSubmitting ? 'Guardando...' : 'Guardar'}</ButtonText>
                         </Button>
                         <Button onPress={closeModal} variant="link" size="sm">
                             <ButtonText>Cancelar</ButtonText>

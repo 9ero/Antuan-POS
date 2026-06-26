@@ -38,6 +38,8 @@ export default function UsersAdmin() {
     const [newName, setNewName] = useState('');
     const [editingId, setEditingId] = useState<number | null>(null);
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     // PIN UI state
     const [expandedPinUserId, setExpandedPinUserId] = useState<number | null>(null);
     const [manualPinUserId, setManualPinUserId] = useState<number | null>(null);
@@ -55,15 +57,21 @@ export default function UsersAdmin() {
     // User CRUD
     const handleSaveUser = async () => {
         if (!newName) { alert('El nombre es requerido'); return; }
-        if (editingId) {
-            await updateUser(editingId, newName);
-        } else {
-            await addUser(newName);
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            if (editingId) {
+                await updateUser(editingId, newName);
+            } else {
+                await addUser(newName);
+            }
+            setUserModalVisible(false);
+            setNewName('');
+            setEditingId(null);
+            loadAll();
+        } finally {
+            setIsSubmitting(false);
         }
-        setUserModalVisible(false);
-        setNewName('');
-        setEditingId(null);
-        loadAll();
     };
 
     const handleEditUser = (user: User) => {
@@ -80,9 +88,15 @@ export default function UsersAdmin() {
 
     // PIN actions
     const handleAutoPin = async (userId: number) => {
-        await createCheckoutPin(generatePin(), userId);
-        setExpandedPinUserId(null);
-        loadAll();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await createCheckoutPin(generatePin(), userId);
+            setExpandedPinUserId(null);
+            loadAll();
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const openManualPin = (userId: number) => {
@@ -98,9 +112,15 @@ export default function UsersAdmin() {
             setManualPinError('Debe tener exactamente 4 caracteres');
             return;
         }
-        await createCheckoutPin(cleaned, manualPinUserId!);
-        setManualPinUserId(null);
-        loadAll();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await createCheckoutPin(cleaned, manualPinUserId!);
+            setManualPinUserId(null);
+            loadAll();
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleSharePin = async (pin: string, userName: string) => {
@@ -190,6 +210,7 @@ export default function UsersAdmin() {
                                                 size="sm"
                                                 bg="$blue600"
                                                 flex={1}
+                                                isDisabled={isSubmitting}
                                                 onPress={() => handleAutoPin(item.id!)}
                                             >
                                                 <ButtonText>Automático</ButtonText>
@@ -242,8 +263,8 @@ export default function UsersAdmin() {
                                 <InputField value={newName} onChangeText={setNewName} />
                             </Input>
                         </FormControl>
-                        <Button onPress={handleSaveUser} size="lg" mb="$2">
-                            <ButtonText>Guardar</ButtonText>
+                        <Button onPress={handleSaveUser} size="lg" mb="$2" isDisabled={isSubmitting}>
+                            <ButtonText>{isSubmitting ? 'Guardando...' : 'Guardar'}</ButtonText>
                         </Button>
                         <Button onPress={() => { setUserModalVisible(false); setEditingId(null); setNewName(''); }} variant="link" size="sm">
                             <ButtonText>Cancelar</ButtonText>
@@ -274,10 +295,10 @@ export default function UsersAdmin() {
                         <Button
                             size="lg"
                             mb="$2"
-                            isDisabled={manualPinInput.length !== 4}
+                            isDisabled={manualPinInput.length !== 4 || isSubmitting}
                             onPress={handleSaveManualPin}
                         >
-                            <ButtonText>Guardar PIN</ButtonText>
+                            <ButtonText>{isSubmitting ? 'Guardando...' : 'Guardar PIN'}</ButtonText>
                         </Button>
                         <Button variant="link" onPress={() => setManualPinUserId(null)}>
                             <ButtonText color="$coolGray400">Cancelar</ButtonText>

@@ -140,49 +140,52 @@ export default function POSScreen() {
             setPinError('Selecciona un cliente');
             return;
         }
+        if (isSubmitting) return;
         setIsSubmitting(true);
-        const valid = await validatePin(checkoutPin, modalUser.id!);
-        if (!valid) {
-            const hasPin = await getPinForUser(modalUser.id!);
-            setPinError(
-                hasPin
-                    ? 'PIN incorrecto'
-                    : `${modalUser.name} no tiene PIN. Generalo desde Admin → Usuarios.`
-            );
-            setIsSubmitting(false);
-            return;
-        }
-        setShowCheckoutModal(false);
-        const result = await createTransaction(modalUser.id!, cartTotal, cart);
-        setIsSubmitting(false);
-        if (result.success && result.transactionId) {
-            if (isConfigured) {
-                getDeviceConfig().then(cfg => {
-                    if (cfg) pushTransactionToTurso(cfg.deviceId, result.transactionId!).catch(() => {});
+        try {
+            const valid = await validatePin(checkoutPin, modalUser.id!);
+            if (!valid) {
+                const hasPin = await getPinForUser(modalUser.id!);
+                setPinError(
+                    hasPin
+                        ? 'PIN incorrecto'
+                        : `${modalUser.name} no tiene PIN. Generalo desde Admin → Usuarios.`
+                );
+                return;
+            }
+            setShowCheckoutModal(false);
+            const result = await createTransaction(modalUser.id!, cartTotal, cart);
+            if (result.success && result.transactionId) {
+                if (isConfigured) {
+                    getDeviceConfig().then(cfg => {
+                        if (cfg) pushTransactionToTurso(cfg.deviceId, result.transactionId!).catch(() => {});
+                    });
+                }
+            }
+            if (result.success) {
+                toast.show({
+                    placement: 'top',
+                    render: ({ id }) => (
+                        <Toast nativeID={'toast-' + id} action="success" variant="solid">
+                            <ToastTitle>¡Venta Exitosa!</ToastTitle>
+                        </Toast>
+                    ),
+                });
+                clearCart();
+                refresh();
+            } else {
+                toast.show({
+                    placement: 'top',
+                    render: ({ id }) => (
+                        <Toast nativeID={'toast-' + id} action="error" variant="solid">
+                            <ToastTitle>Error</ToastTitle>
+                            <ToastDescription>{result.error}</ToastDescription>
+                        </Toast>
+                    ),
                 });
             }
-        }
-        if (result.success) {
-            toast.show({
-                placement: 'top',
-                render: ({ id }) => (
-                    <Toast nativeID={'toast-' + id} action="success" variant="solid">
-                        <ToastTitle>¡Venta Exitosa!</ToastTitle>
-                    </Toast>
-                ),
-            });
-            clearCart();
-            refresh();
-        } else {
-            toast.show({
-                placement: 'top',
-                render: ({ id }) => (
-                    <Toast nativeID={'toast-' + id} action="error" variant="solid">
-                        <ToastTitle>Error</ToastTitle>
-                        <ToastDescription>{result.error}</ToastDescription>
-                    </Toast>
-                ),
-            });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
