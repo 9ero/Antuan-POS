@@ -34,7 +34,7 @@ const LOW_STOCK = 5;
 const REASON_LABELS: Record<string, string> = {
     venta: 'Venta',
     recepcion: 'Recepción',
-    extravio: 'Extravío',
+    extravio: 'Faltante',
     ajuste: 'Ajuste',
 };
 
@@ -167,7 +167,7 @@ export default function InventoryAdmin() {
                                         flex={1} size="sm" variant="outline" action="negative"
                                         onPress={() => openModal(product, 'extravio')}
                                     >
-                                        <ButtonText color="$red500">Extravío</ButtonText>
+                                        <ButtonText color="$red500">Faltante</ButtonText>
                                     </Button>
                                     <Pressable
                                         onPress={() => toggleHistory(product.id!)}
@@ -227,7 +227,7 @@ export default function InventoryAdmin() {
                 <ModalContent>
                     <ModalHeader>
                         <Heading size="md">
-                            {modalMode === 'recepcion' ? 'Recibir mercancía' : 'Registrar extravío'}
+                            {modalMode === 'recepcion' ? 'Recibir mercancía' : 'Reportar faltante'}
                         </Heading>
                         <ModalCloseButton><Icon as={CloseIcon} /></ModalCloseButton>
                     </ModalHeader>
@@ -236,7 +236,7 @@ export default function InventoryAdmin() {
                         <FormControl>
                             <FormControlLabel>
                                 <FormControlLabelText>
-                                    {modalMode === 'recepcion' ? 'Cantidad a recibir' : 'Cantidad extraviada'}
+                                    {modalMode === 'recepcion' ? 'Cantidad a recibir' : 'Cantidad faltante'}
                                 </FormControlLabelText>
                             </FormControlLabel>
                             <Input size="xl">

@@ -1,6 +1,10 @@
 import { dbResult } from './database';
 import { User, Product, CartItem, Transaction, TransactionSchema } from './schemas';
 
+// SQLite CURRENT_TIMESTAMP stores UTC as 'YYYY-MM-DD HH:MM:SS' (space, no Z).
+// JS/ISO strings use 'YYYY-MM-DDTHH:MM:SS.mmmZ'. Normalize to ISO for JS arithmetic.
+const toISO = (s: string) => s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
+
 export { User, Product, CartItem, Transaction };
 
 // Users
@@ -333,7 +337,7 @@ export const getCurrentPeriodStart = async (): Promise<string> => {
     const firstTx = await dbResult.getFirstAsync<{ created_at: string }>(
         'SELECT created_at FROM transactions ORDER BY created_at ASC LIMIT 1'
     );
-    if (firstTx) return firstTx.created_at;
+    if (firstTx) return toISO(firstTx.created_at);
 
     return new Date().toISOString();
 };
@@ -344,7 +348,7 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
     }>(
         `SELECT t.id, t.user_id, t.total, u.name as user_name
          FROM transactions t LEFT JOIN users u ON t.user_id = u.id
-         WHERE t.created_at >= ? AND t.created_at < ?
+         WHERE datetime(t.created_at) >= datetime(?) AND datetime(t.created_at) < datetime(?)
          ORDER BY t.created_at`,
         openedAt, closedAt
     );
@@ -364,12 +368,12 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
          FROM transaction_items ti
          JOIN products p ON ti.product_id = p.id
          JOIN transactions t ON ti.transaction_id = t.id
-         WHERE t.created_at >= ? AND t.created_at < ?`,
+         WHERE datetime(t.created_at) >= datetime(?) AND datetime(t.created_at) < datetime(?)`,
         openedAt, closedAt
     );
 
     const periodDays = Math.max(
-        (new Date(closedAt).getTime() - new Date(openedAt).getTime()) / 86400000,
+        (new Date(toISO(closedAt)).getTime() - new Date(toISO(openedAt)).getTime()) / 86400000,
         1
     );
 
@@ -406,7 +410,8 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
                 SUM(ABS(sm.quantity_change)) as units_lost
          FROM stock_movements sm
          JOIN products p ON sm.product_id = p.id
-         WHERE sm.reason = 'extravio' AND sm.created_at >= ? AND sm.created_at < ?
+         WHERE sm.reason = 'extravio'
+           AND datetime(sm.created_at) >= datetime(?) AND datetime(sm.created_at) < datetime(?)
          GROUP BY sm.product_id`,
         openedAt, closedAt
     );

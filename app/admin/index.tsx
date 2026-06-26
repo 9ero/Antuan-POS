@@ -39,7 +39,7 @@ export default function AdminDashboard() {
                 >
                     <View>
                         <Text className="text-xl font-bold text-gray-800">Inventario</Text>
-                        <Text className="text-gray-500">Stock, recepciones y extravíos</Text>
+                        <Text className="text-gray-500">Stock, recepciones y faltantes</Text>
                     </View>
                     <Text className="text-2xl text-gray-400">→</Text>
                 </TouchableOpacity>

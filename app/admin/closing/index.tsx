@@ -115,7 +115,7 @@ function buildShareText(s: ClosingSummary): string {
     lines.push('', 'PRODUCTOS:');
     for (const p of s.byProduct) {
         const days = p.daysRemaining !== null ? ` · ~${p.daysRemaining} días stock` : '';
-        const lost = p.unitsLost > 0 ? ` · ${p.unitsLost} extraviadas` : '';
+        const lost = p.unitsLost > 0 ? ` · ${p.unitsLost} faltantes` : '';
         lines.push(`• ${p.name} — ${p.unitsSold} vendidas${lost}, ${fmt(p.revenue)}${days}`);
     }
     const { burnRanking, profitRanking } = computeStats(s);
@@ -162,7 +162,7 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
                                         <Text size="sm" fontWeight="$semibold">{p.name}</Text>
                                         <Text size="xs" color="$coolGray500">
                                             {p.unitsSold > 0 ? `${p.unitsSold} vend.` : ''}
-                                            {p.unitsLost > 0 ? `${p.unitsSold > 0 ? ' · ' : ''}${p.unitsLost} extr.` : ''}
+                                            {p.unitsLost > 0 ? `${p.unitsSold > 0 ? ' · ' : ''}${p.unitsLost} falt.` : ''}
                                         </Text>
                                     </VStack>
                                 </HStack>
@@ -269,7 +269,7 @@ export default function CashClosingScreen() {
         const productoRows = s.byProduct.map(p => ({
             Producto: p.name,
             Vendidas: p.unitsSold,
-            Extraviadas: p.unitsLost,
+            Faltantes: p.unitsLost,
             'Ingresos (₡)': fmtN(p.revenue),
             'Costo (₡)': fmtN(p.cost),
             'Ganancia (₡)': fmtN(p.profit),
@@ -287,7 +287,7 @@ export default function CashClosingScreen() {
         // Sheet 4: Estadísticas (array of arrays for custom layout)
         const statsAoa: (string | number)[][] = [
             ['CONSUMO MÁS RÁPIDO'],
-            ['#', 'Producto', 'uds/día', 'Vendidas', 'Extraviadas', 'Stock actual', 'Estado'],
+            ['#', 'Producto', 'uds/día', 'Vendidas', 'Faltantes', 'Stock actual', 'Estado'],
             ...st.burnRanking.map((p, i) => [
                 i + 1, p.name,
                 +p.dailyBurn.toFixed(2),
@@ -487,7 +487,7 @@ export default function CashClosingScreen() {
                                                         )}
                                                         {p.unitsLost > 0 && (
                                                             <Text size="xs" color="$red500" fontWeight="$semibold">
-                                                                {p.unitsLost} extraviadas
+                                                                {p.unitsLost} faltantes
                                                             </Text>
                                                         )}
                                                         {p.daysRemaining !== null && (
@@ -529,22 +529,13 @@ export default function CashClosingScreen() {
 
                     {/* Actions */}
                     {!loading && summary && summary.transactionCount > 0 && (
-                        <VStack space="sm">
-                            <Button
-                                size="lg"
-                                variant="outline"
-                                onPress={() => exportExcel(summary)}
-                            >
-                                <ButtonText>Exportar Excel</ButtonText>
-                            </Button>
-                            <Button
-                                size="xl"
-                                bg="$red600"
-                                onPress={() => setShowConfirmModal(true)}
-                            >
-                                <ButtonText>Cerrar Caja</ButtonText>
-                            </Button>
-                        </VStack>
+                        <Button
+                            size="xl"
+                            bg="$red600"
+                            onPress={() => setShowConfirmModal(true)}
+                        >
+                            <ButtonText>Cerrar Caja</ButtonText>
+                        </Button>
                     )}
                     {!loading && (!summary || summary.transactionCount === 0) && (
                         <Button size="xl" bg="$red600" isDisabled>
@@ -604,7 +595,7 @@ export default function CashClosingScreen() {
                                                                     <Text size="sm">{p.name}</Text>
                                                                     <HStack space="sm">
                                                                         {p.unitsSold > 0 && <Text size="xs" color="$coolGray500">×{p.unitsSold} vend.</Text>}
-                                                                        {p.unitsLost > 0 && <Text size="xs" color="$red500">×{p.unitsLost} extr.</Text>}
+                                                                        {p.unitsLost > 0 && <Text size="xs" color="$red500">×{p.unitsLost} falt.</Text>}
                                                                     </HStack>
                                                                 </VStack>
                                                                 <Text size="sm" color="$green700">{fmt(p.revenue)}</Text>
