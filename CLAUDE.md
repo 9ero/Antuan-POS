@@ -60,25 +60,33 @@ utils/
 - Patrón: `if (file.exists) file.delete()` antes de `file.create()` para evitar error de archivo existente
 - Columnas auto-ajustadas: `autoFitCols(ws)` calcula `wch` máximo por columna sobre todas las celdas
 
+## Terminología: faltantes
+En UI se usa **faltante/s** (no "extravío"). El valor en DB sigue siendo `reason = 'extravio'` — solo cambia el texto visible. `REASON_LABELS` en `inventory/index.tsx` mapea `extravio → 'Faltante'`.
+
 ## Cierre de caja (`app/admin/closing/index.tsx`)
-- `buildClosingSummary(openedAt, closedAt)` — agrega transacciones + ítems + extravíos del período en JS
-- `computeStats(summary)` — rankings: consumo más rápido (uds/día) y mayor ganancia total (sin extravíos)
-- Excel 4 hojas: Resumen, Por Cliente, Por Producto, Estadísticas
+- `buildClosingSummary(openedAt, closedAt)` — agrega transacciones + ítems + faltantes del período en JS
+- `computeStats(summary)` — rankings: consumo más rápido (uds/día) y mayor ganancia total (sin faltantes)
+- Excel 4 hojas: Resumen, Por Cliente, Por Producto, Estadísticas — solo se genera al confirmar cierre
+- **No hay botón "Exportar Excel" en el período abierto** — el Excel es exclusivo del cierre confirmado para evitar duplicados con el reporte oficial
 - Historial de cierres anteriores con botones Compartir (texto) y Excel
 - `isSubmitting` en botón de confirmación de cierre
 
 ## Fechas y timezone
-SQLite `CURRENT_TIMESTAMP` guarda UTC como `'YYYY-MM-DD HH:MM:SS'` (sin Z). JavaScript lo parsea como hora local, causando desfase de 6 h en Costa Rica (UTC-6). Regla: al comparar fechas SQLite contra ISO strings de `new Date().toISOString()`, normalizar ambas con:
-```typescript
-const toUTC = (s: string) => new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+SQLite `CURRENT_TIMESTAMP` guarda UTC como `'YYYY-MM-DD HH:MM:SS'` (sin Z). JavaScript lo parsea como hora local, causando desfase de 6 h en Costa Rica (UTC-6).
+
+**En SQL (`db/queries.ts`):** envolver ambos lados con `datetime()` para que SQLite normalice los formatos antes de comparar:
+```sql
+WHERE datetime(t.created_at) >= datetime(?) AND datetime(t.created_at) < datetime(?)
 ```
-Los filtros que comparan fecha SQLite contra otra fecha SQLite (Hoy/Semana/Mes) no necesitan corrección porque el desfase se cancela en ambos lados.
+Helper `toISO(s)` normaliza strings SQLite a ISO antes de pasarlos a `new Date()` en JS.
+
+**En JS (filtros client-side):** usar `toUTC(s)` solo cuando se compara fecha SQLite contra ISO string. Filtros SQLite vs SQLite (Hoy/Semana/Mes) no necesitan corrección porque el desfase se cancela en ambos lados.
 
 ## Estado de features (roadmap aprobado)
 - ✅ Feature 1: Precio de costo + margen (20/30/40%) en productos
 - ✅ Feature 2: Filtros en historial + Excel mejorado (3 hojas: Detalle, Por Cliente, Por Producto)
 - ✅ Feature 3: PIN de checkout por usuario (reusable, gestionado desde panel de Usuarios)
-- ✅ Feature 4: Inventario + movimientos de stock + extravíos
+- ✅ Feature 4: Inventario + movimientos de stock + faltantes
 - ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
 - ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
 - ⬜ Feature 7: Turso backup/restore (push en cierre de caja, pull histórico bajo demanda)
