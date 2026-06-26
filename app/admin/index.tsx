@@ -45,6 +45,17 @@ export default function AdminDashboard() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
+                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex-row items-center justify-between"
+                    onPress={() => router.push('/admin/closing')}
+                >
+                    <View>
+                        <Text className="text-xl font-bold text-gray-800">Cierre de Caja</Text>
+                        <Text className="text-gray-500">Reporte del período y cierre</Text>
+                    </View>
+                    <Text className="text-2xl text-gray-400">→</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                     className="bg-red-50 p-6 rounded-xl border border-red-100 mt-8"
                     onPress={() => router.replace('/')}
                 >

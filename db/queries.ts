@@ -282,3 +282,227 @@ export const getTransactions = async (): Promise<TransactionDetail[]> => {
 
     return Array.from(transactionsMap.values());
 };
+
+// Cash Closings
+export interface CashClosing {
+    id: number;
+    opened_at: string;
+    closed_at: string;
+    total_sales: number;
+    summary_json: string;
+    created_at: string;
+}
+
+export interface ClosingUserSummary {
+    userId: number | null;
+    userName: string;
+    transactionCount: number;
+    total: number;
+    products: Array<{ name: string; quantity: number; revenue: number }>;
+}
+
+export interface ClosingProductSummary {
+    productId: number;
+    name: string;
+    unitsSold: number;
+    unitsLost: number;
+    revenue: number;
+    cost: number;
+    profit: number;
+    currentStock: number;
+    daysRemaining: number | null;
+}
+
+export interface ClosingSummary {
+    openedAt: string;
+    closedAt: string;
+    transactionCount: number;
+    totalRevenue: number;
+    totalCost: number;
+    totalProfit: number;
+    byUser: ClosingUserSummary[];
+    byProduct: ClosingProductSummary[];
+}
+
+export const getCurrentPeriodStart = async (): Promise<string> => {
+    const lastClosing = await dbResult.getFirstAsync<{ closed_at: string }>(
+        'SELECT closed_at FROM cash_closings ORDER BY created_at DESC LIMIT 1'
+    );
+    if (lastClosing) return lastClosing.closed_at;
+
+    const firstTx = await dbResult.getFirstAsync<{ created_at: string }>(
+        'SELECT created_at FROM transactions ORDER BY created_at ASC LIMIT 1'
+    );
+    if (firstTx) return firstTx.created_at;
+
+    return new Date().toISOString();
+};
+
+export const buildClosingSummary = async (openedAt: string, closedAt: string): Promise<ClosingSummary> => {
+    const transactions = await dbResult.getAllAsync<{
+        id: number; user_id: number | null; total: number; user_name: string | null;
+    }>(
+        `SELECT t.id, t.user_id, t.total, u.name as user_name
+         FROM transactions t LEFT JOIN users u ON t.user_id = u.id
+         WHERE t.created_at >= ? AND t.created_at < ?
+         ORDER BY t.created_at`,
+        openedAt, closedAt
+    );
+
+    if (transactions.length === 0) {
+        return { openedAt, closedAt, transactionCount: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0, byUser: [], byProduct: [] };
+    }
+
+    const items = await dbResult.getAllAsync<{
+        transaction_id: number; product_id: number; product_name: string;
+        quantity: number; price_at_purchase: number; cost_price: number; current_stock: number;
+    }>(
+        `SELECT ti.transaction_id, ti.product_id, p.name as product_name,
+                ti.quantity, ti.price_at_purchase,
+                COALESCE(p.cost_price, 0) as cost_price,
+                p.stock as current_stock
+         FROM transaction_items ti
+         JOIN products p ON ti.product_id = p.id
+         JOIN transactions t ON ti.transaction_id = t.id
+         WHERE t.created_at >= ? AND t.created_at < ?`,
+        openedAt, closedAt
+    );
+
+    const periodDays = Math.max(
+        (new Date(closedAt).getTime() - new Date(openedAt).getTime()) / 86400000,
+        1
+    );
+
+    // Product aggregation (sales)
+    const productMap = new Map<number, ClosingProductSummary>();
+    for (const item of items) {
+        const revenue = item.price_at_purchase * item.quantity;
+        const cost = item.cost_price * item.quantity;
+        const existing = productMap.get(item.product_id);
+        if (existing) {
+            existing.unitsSold += item.quantity;
+            existing.revenue += revenue;
+            existing.cost += cost;
+            existing.profit += revenue - cost;
+        } else {
+            productMap.set(item.product_id, {
+                productId: item.product_id,
+                name: item.product_name,
+                unitsSold: item.quantity,
+                unitsLost: 0,
+                revenue, cost,
+                profit: revenue - cost,
+                currentStock: item.current_stock,
+                daysRemaining: null,
+            });
+        }
+    }
+
+    // Merge extravíos (include products with losses but no sales in this period)
+    const losses = await dbResult.getAllAsync<{
+        product_id: number; product_name: string; units_lost: number; current_stock: number;
+    }>(
+        `SELECT sm.product_id, p.name as product_name, p.stock as current_stock,
+                SUM(ABS(sm.quantity_change)) as units_lost
+         FROM stock_movements sm
+         JOIN products p ON sm.product_id = p.id
+         WHERE sm.reason = 'extravio' AND sm.created_at >= ? AND sm.created_at < ?
+         GROUP BY sm.product_id`,
+        openedAt, closedAt
+    );
+    for (const loss of losses) {
+        const existing = productMap.get(loss.product_id);
+        if (existing) {
+            existing.unitsLost = loss.units_lost;
+        } else {
+            productMap.set(loss.product_id, {
+                productId: loss.product_id,
+                name: loss.product_name,
+                unitsSold: 0,
+                unitsLost: loss.units_lost,
+                revenue: 0, cost: 0, profit: 0,
+                currentStock: loss.current_stock,
+                daysRemaining: null,
+            });
+        }
+    }
+
+    for (const p of productMap.values()) {
+        const dailyRate = p.unitsSold / periodDays;
+        p.daysRemaining = dailyRate > 0 ? Math.floor(p.currentStock / dailyRate) : null;
+    }
+
+    // Index items by transaction
+    const txItemMap = new Map<number, typeof items[number][]>();
+    for (const item of items) {
+        const arr = txItemMap.get(item.transaction_id) ?? [];
+        arr.push(item);
+        txItemMap.set(item.transaction_id, arr);
+    }
+
+    // User aggregation
+    const userMap = new Map<string, ClosingUserSummary>();
+    const userProductMap = new Map<string, Map<string, { name: string; quantity: number; revenue: number }>>();
+
+    for (const tx of transactions) {
+        const key = tx.user_id === null ? 'anon' : String(tx.user_id);
+        const existing = userMap.get(key);
+        if (existing) {
+            existing.transactionCount++;
+            existing.total += tx.total;
+        } else {
+            userMap.set(key, {
+                userId: tx.user_id,
+                userName: tx.user_name ?? 'Sin usuario',
+                transactionCount: 1,
+                total: tx.total,
+                products: [],
+            });
+            userProductMap.set(key, new Map());
+        }
+        const prodMap = userProductMap.get(key)!;
+        for (const item of txItemMap.get(tx.id) ?? []) {
+            const p = prodMap.get(item.product_name);
+            if (p) {
+                p.quantity += item.quantity;
+                p.revenue += item.price_at_purchase * item.quantity;
+            } else {
+                prodMap.set(item.product_name, {
+                    name: item.product_name,
+                    quantity: item.quantity,
+                    revenue: item.price_at_purchase * item.quantity,
+                });
+            }
+        }
+    }
+    for (const [key, user] of userMap) {
+        const pm = userProductMap.get(key);
+        if (pm) user.products = Array.from(pm.values()).sort((a, b) => b.quantity - a.quantity);
+    }
+
+    const byProduct = Array.from(productMap.values()).sort((a, b) => b.unitsSold - a.unitsSold);
+    const totalRevenue = byProduct.reduce((s, p) => s + p.revenue, 0);
+    const totalCost = byProduct.reduce((s, p) => s + p.cost, 0);
+
+    return {
+        openedAt, closedAt,
+        transactionCount: transactions.length,
+        totalRevenue, totalCost,
+        totalProfit: totalRevenue - totalCost,
+        byUser: Array.from(userMap.values()).sort((a, b) => b.total - a.total),
+        byProduct,
+    };
+};
+
+export const createCashClosing = async (openedAt: string, closedAt: string, totalSales: number, summaryJson: string) => {
+    await dbResult.runAsync(
+        'INSERT INTO cash_closings (opened_at, closed_at, total_sales, summary_json) VALUES (?, ?, ?, ?)',
+        openedAt, closedAt, totalSales, summaryJson
+    );
+};
+
+export const getCashClosings = async (): Promise<CashClosing[]> => {
+    return await dbResult.getAllAsync<CashClosing>(
+        'SELECT * FROM cash_closings ORDER BY created_at DESC'
+    );
+};

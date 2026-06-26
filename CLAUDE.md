@@ -24,13 +24,14 @@ POS móvil offline-first para tienda pequeña en Costa Rica. El **comprador** (n
 ```
 app/
   index.tsx          — POS principal: grilla de productos, carrito, modal de checkout (usuario + PIN)
-  history.tsx        — Historial de ventas con filtros y export Excel (3 hojas)
+  history.tsx        — Historial de ventas con filtros y export Excel (3 hojas, columnas auto-ajustadas)
   admin/
     _layout.tsx      — Guard con PIN 1234
     index.tsx        — Dashboard de admin
     products/        — CRUD de productos con precio costo + margen
     users/           — CRUD de usuarios con gestión de PINs integrada por tarjeta
     inventory/       — Stock, recepciones y extravíos con historial de movimientos
+    closing/         — Cierre de caja: reporte período, rankings, historial de cierres, Excel
 db/
   database.ts        — initDatabase(), CREATE TABLE IF NOT EXISTS, migraciones try/catch
   queries.ts         — todas las funciones de acceso a DB
@@ -48,22 +49,33 @@ utils/
 | `transaction_items` | id, transaction_id, product_id, price_at_purchase, quantity |
 | `checkout_pins` | id, pin, user_id FK, is_used, created_at |
 | `stock_movements` | id, product_id, quantity_change, reason, created_at |
+| `cash_closings` | id, opened_at, closed_at, total_sales, summary_json, created_at |
 
 **Migraciones:** patrón try/catch en `db/database.ts`. `CREATE TABLE IF NOT EXISTS` para tablas nuevas; `ALTER TABLE` para columnas nuevas en tablas existentes.
 
 **Transacciones atómicas:** `BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK` en queries que modifican múltiples tablas.
+
+## Excel export (closing + history)
+- Librería: `xlsx`, escritura vía `File`/`Paths` de `expo-file-system` v2, compartida con `expo-sharing`
+- Patrón: `if (file.exists) file.delete()` antes de `file.create()` para evitar error de archivo existente
+- Columnas auto-ajustadas: `autoFitCols(ws)` calcula `wch` máximo por columna sobre todas las celdas
+
+## Cierre de caja (`app/admin/closing/index.tsx`)
+- `buildClosingSummary(openedAt, closedAt)` — agrega transacciones + ítems + extravíos del período en JS
+- `computeStats(summary)` — rankings: consumo más rápido (uds/día) y mayor ganancia total (sin extravíos)
+- Excel 4 hojas: Resumen, Por Cliente, Por Producto, Estadísticas
+- Historial de cierres anteriores con botones Compartir (texto) y Excel
+- `isSubmitting` en botón de confirmación de cierre
 
 ## Estado de features (roadmap aprobado)
 - ✅ Feature 1: Precio de costo + margen (20/30/40%) en productos
 - ✅ Feature 2: Filtros en historial + Excel mejorado (3 hojas: Detalle, Por Cliente, Por Producto)
 - ✅ Feature 3: PIN de checkout por usuario (reusable, gestionado desde panel de Usuarios)
 - ✅ Feature 4: Inventario + movimientos de stock + extravíos
-- ⬜ Feature 5: Cierre de caja (tabla `cash_closings`, reporte por usuario + producto)
+- ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
 - ⬜ Feature 6: Estadísticas y reportes (velocidad de agotamiento, ganancia por producto)
 - ⬜ Feature 7: Turso backup/restore (push en cierre de caja, pull histórico bajo demanda)
 
-## Próximos pasos (Feature 5 — Cierre de caja)
-Nueva tabla `cash_closings` (opened_at, closed_at, total_sales, summary_json).
-Nueva pantalla `app/admin/closing/index.tsx`.
-El cierre genera un reporte por usuario (total + detalle de productos) y por producto (unidades, ingresos, costo, ganancia).
+## Próximos pasos (Feature 6 — Estadísticas y reportes)
+Ampliar `app/history.tsx` con sección de estadísticas: producto más vendido, ganancia estimada del período, velocidad de agotamiento por producto (`stock_actual / tasa_diaria`).
 Al cerrar caja → datos se subirán a Turso (Feature 7).

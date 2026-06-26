@@ -56,6 +56,15 @@ export const initDatabase = async () => {
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (product_id) REFERENCES products (id)
             );
+
+            CREATE TABLE IF NOT EXISTS cash_closings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                opened_at TEXT NOT NULL,
+                closed_at TEXT NOT NULL,
+                total_sales REAL NOT NULL,
+                summary_json TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         `);
 
         // Migration for existing databases

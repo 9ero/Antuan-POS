@@ -158,10 +158,27 @@ export default function HistoryScreen() {
                     'Ingresos (₡)': data.revenue,
                 }));
 
+            const autoFitCols = (ws: XLSX.WorkSheet) => {
+                const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
+                const cols: { wch: number }[] = [];
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    let maxLen = 8;
+                    for (let R = range.s.r; R <= range.e.r; R++) {
+                        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+                        if (cell?.v != null) maxLen = Math.max(maxLen, String(cell.v).length);
+                    }
+                    cols.push({ wch: Math.min(maxLen + 2, 60) });
+                }
+                ws['!cols'] = cols;
+            };
+
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailData), 'Detalle');
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byUserData), 'Por Cliente');
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byProductData), 'Por Producto');
+            const ws1 = XLSX.utils.json_to_sheet(detailData);    autoFitCols(ws1);
+            const ws2 = XLSX.utils.json_to_sheet(byUserData);    autoFitCols(ws2);
+            const ws3 = XLSX.utils.json_to_sheet(byProductData); autoFitCols(ws3);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Detalle');
+            XLSX.utils.book_append_sheet(wb, ws2, 'Por Cliente');
+            XLSX.utils.book_append_sheet(wb, ws3, 'Por Producto');
 
             const dates = filtered.map(t => t.created_at ? new Date(t.created_at).getTime() : 0).filter(Boolean);
             const filename = dates.length > 0
@@ -170,6 +187,7 @@ export default function HistoryScreen() {
 
             const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
             const file = new File(Paths.document, filename);
+            if (file.exists) file.delete();
             file.create();
             file.write(wbout, { encoding: 'base64' });
 
