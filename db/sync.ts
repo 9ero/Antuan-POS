@@ -64,7 +64,7 @@ export const registerDevice = async (name: string): Promise<number> => {
 };
 
 export const pushToTurso = async (deviceId: number): Promise<void> => {
-    const [users, products, closings] = await Promise.all([
+    const [users, products, closings, txs, items, movements] = await Promise.all([
         dbResult.getAllAsync<{ id: number; name: string; created_at: string }>(
             'SELECT id, name, created_at FROM users'
         ),
@@ -77,6 +77,15 @@ export const pushToTurso = async (deviceId: number): Promise<void> => {
             id: number; opened_at: string; closed_at: string;
             total_sales: number; summary_json: string; created_at: string;
         }>('SELECT id, opened_at, closed_at, total_sales, summary_json, created_at FROM cash_closings'),
+        dbResult.getAllAsync<{ id: number; user_id: number | null; total: number; created_at: string }>(
+            'SELECT id, user_id, total, created_at FROM transactions'
+        ),
+        dbResult.getAllAsync<{ id: number; transaction_id: number; product_id: number; price_at_purchase: number; quantity: number }>(
+            'SELECT id, transaction_id, product_id, price_at_purchase, quantity FROM transaction_items'
+        ),
+        dbResult.getAllAsync<{ id: number; product_id: number; quantity_change: number; reason: string; created_at: string }>(
+            'SELECT id, product_id, quantity_change, reason, created_at FROM stock_movements'
+        ),
     ]);
 
     const statements: Array<{ sql: string; args?: (string | number | null)[] }> = [];
@@ -104,9 +113,88 @@ export const pushToTurso = async (deviceId: number): Promise<void> => {
             args: [deviceId, c.opened_at, c.closed_at, c.total_sales, c.summary_json, c.created_at],
         });
     }
+    for (const t of txs) {
+        statements.push({
+            sql: `INSERT OR IGNORE INTO transactions (id, device_id, user_id, total, created_at) VALUES (?, ?, ?, ?, ?)`,
+            args: [t.id, deviceId, t.user_id ?? null, t.total, t.created_at],
+        });
+    }
+    for (const i of items) {
+        statements.push({
+            sql: `INSERT OR IGNORE INTO transaction_items
+                  (id, device_id, transaction_id, product_id, price_at_purchase, quantity)
+                  VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [i.id, deviceId, i.transaction_id, i.product_id, i.price_at_purchase, i.quantity],
+        });
+    }
+    for (const m of movements) {
+        statements.push({
+            sql: `INSERT OR IGNORE INTO stock_movements
+                  (id, device_id, product_id, quantity_change, reason, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [m.id, deviceId, m.product_id, m.quantity_change, m.reason, m.created_at],
+        });
+    }
 
     if (statements.length > 0) await tursoExecute(statements);
     await saveSetting('last_sync_at', new Date().toISOString());
+    await saveSetting('pending_sync', 'false');
+};
+
+// If there are pending items from a failed push, do a full sync (covers everything).
+// Otherwise, run the targeted push fn. On failure, mark pending for next attempt.
+const withPendingQueue = async (deviceId: number, fn: () => Promise<void>): Promise<void> => {
+    const hasPending = (await getSetting('pending_sync')) === 'true';
+    if (hasPending) {
+        try { await pushToTurso(deviceId); } catch { /* still offline, stays pending */ }
+        return;
+    }
+    try {
+        await fn();
+    } catch {
+        await saveSetting('pending_sync', 'true');
+    }
+};
+
+export const pushTransactionToTurso = async (deviceId: number, txId: number): Promise<void> => {
+    await withPendingQueue(deviceId, async () => {
+        const [tx, items] = await Promise.all([
+            dbResult.getFirstAsync<{ id: number; user_id: number | null; total: number; created_at: string }>(
+                'SELECT id, user_id, total, created_at FROM transactions WHERE id = ?', txId
+            ),
+            dbResult.getAllAsync<{ id: number; transaction_id: number; product_id: number; price_at_purchase: number; quantity: number }>(
+                'SELECT id, transaction_id, product_id, price_at_purchase, quantity FROM transaction_items WHERE transaction_id = ?', txId
+            ),
+        ]);
+        if (!tx) return;
+        await tursoExecute([
+            {
+                sql: `INSERT OR IGNORE INTO transactions (id, device_id, user_id, total, created_at) VALUES (?, ?, ?, ?, ?)`,
+                args: [tx.id, deviceId, tx.user_id ?? null, tx.total, tx.created_at],
+            },
+            ...items.map(i => ({
+                sql: `INSERT OR IGNORE INTO transaction_items
+                      (id, device_id, transaction_id, product_id, price_at_purchase, quantity)
+                      VALUES (?, ?, ?, ?, ?, ?)`,
+                args: [i.id, deviceId, i.transaction_id, i.product_id, i.price_at_purchase, i.quantity] as (string | number | null)[],
+            })),
+        ]);
+    });
+};
+
+export const pushStockMovementToTurso = async (deviceId: number, movId: number): Promise<void> => {
+    await withPendingQueue(deviceId, async () => {
+        const mov = await dbResult.getFirstAsync<{ id: number; product_id: number; quantity_change: number; reason: string; created_at: string }>(
+            'SELECT id, product_id, quantity_change, reason, created_at FROM stock_movements WHERE id = ?', movId
+        );
+        if (!mov) return;
+        await tursoExecute([{
+            sql: `INSERT OR IGNORE INTO stock_movements
+                  (id, device_id, product_id, quantity_change, reason, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [mov.id, deviceId, mov.product_id, mov.quantity_change, mov.reason, mov.created_at],
+        }]);
+    });
 };
 
 // pushToTurso already includes all local cash_closings, so this is just an alias

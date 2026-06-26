@@ -33,6 +33,8 @@ import { useProductSearch } from '@/hooks/useProductSearch';
 import { useScanner } from '@/hooks/useScanner';
 import { createTransaction, validatePin, getPinForUser } from '@/db/queries';
 import { User, Product } from '@/db/schemas';
+import { isConfigured } from '@/db/turso';
+import { getDeviceConfig, pushTransactionToTurso } from '@/db/sync';
 
 export default function POSScreen() {
     const toast = useToast();
@@ -153,6 +155,13 @@ export default function POSScreen() {
         setShowCheckoutModal(false);
         const result = await createTransaction(modalUser.id!, cartTotal, cart);
         setIsSubmitting(false);
+        if (result.success && result.transactionId) {
+            if (isConfigured) {
+                getDeviceConfig().then(cfg => {
+                    if (cfg) pushTransactionToTurso(cfg.deviceId, result.transactionId!).catch(() => {});
+                });
+            }
+        }
         if (result.success) {
             toast.show({
                 placement: 'top',

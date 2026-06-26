@@ -104,11 +104,11 @@ export const createTransaction = async (userId: number, total: number, items: Ca
         }
 
         await dbResult.execAsync('COMMIT');
-        return { success: true };
+        return { success: true, transactionId: transactionId as number };
     } catch (e) {
         console.error(e);
         await dbResult.execAsync('ROLLBACK');
-        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
+        return { success: false, transactionId: null, error: e instanceof Error ? e.message : 'Error desconocido' };
     }
 }
 
@@ -133,15 +133,15 @@ export const addStock = async (productId: number, quantity: number, reason: 'rec
     try {
         await dbResult.execAsync('BEGIN TRANSACTION');
         await dbResult.runAsync('UPDATE products SET stock = stock + ? WHERE id = ?', quantity, productId);
-        await dbResult.runAsync(
+        const movResult = await dbResult.runAsync(
             'INSERT INTO stock_movements (product_id, quantity_change, reason) VALUES (?, ?, ?)',
             productId, quantity, reason
         );
         await dbResult.execAsync('COMMIT');
-        return { success: true };
+        return { success: true, movementId: movResult.lastInsertRowId as number };
     } catch (e) {
         await dbResult.execAsync('ROLLBACK');
-        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
+        return { success: false, movementId: null, error: e instanceof Error ? e.message : 'Error desconocido' };
     }
 };
 
@@ -152,15 +152,15 @@ export const registerLoss = async (productId: number, quantity: number) => {
         if (!product) throw new Error('Producto no encontrado');
         if (product.stock < quantity) throw new Error(`Stock insuficiente. Disponible: ${product.stock}`);
         await dbResult.runAsync('UPDATE products SET stock = stock - ? WHERE id = ?', quantity, productId);
-        await dbResult.runAsync(
+        const movResult = await dbResult.runAsync(
             'INSERT INTO stock_movements (product_id, quantity_change, reason) VALUES (?, ?, ?)',
             productId, -quantity, 'extravio'
         );
         await dbResult.execAsync('COMMIT');
-        return { success: true };
+        return { success: true, movementId: movResult.lastInsertRowId as number };
     } catch (e) {
         await dbResult.execAsync('ROLLBACK');
-        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
+        return { success: false, movementId: null, error: e instanceof Error ? e.message : 'Error desconocido' };
     }
 };
 

@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Product, StockMovement, getProducts, addStock, registerLoss, getStockMovements } from '@/db/queries';
+import { isConfigured } from '@/db/turso';
+import { getDeviceConfig, pushStockMovementToTurso } from '@/db/sync';
 import {
     Box,
     Text,
@@ -96,6 +98,13 @@ export default function InventoryAdmin() {
             : await registerLoss(modalProductId!, qty);
         setIsSubmitting(false);
 
+        if (result.success && result.movementId) {
+            if (isConfigured) {
+                getDeviceConfig().then(cfg => {
+                    if (cfg) pushStockMovementToTurso(cfg.deviceId, result.movementId!).catch(() => {});
+                });
+            }
+        }
         if (result.success) {
             setModalProductId(null);
             if (expandedId === modalProductId) {

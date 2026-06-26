@@ -110,5 +110,37 @@ export const initTursoSchema = async (): Promise<void> => {
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )`,
         },
+        {
+            sql: `CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER,
+                device_id INTEGER NOT NULL,
+                user_id INTEGER,
+                total REAL NOT NULL,
+                created_at TEXT,
+                PRIMARY KEY (id, device_id)
+            )`,
+        },
+        {
+            sql: `CREATE TABLE IF NOT EXISTS transaction_items (
+                id INTEGER,
+                device_id INTEGER NOT NULL,
+                transaction_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                price_at_purchase REAL NOT NULL,
+                quantity INTEGER DEFAULT 1,
+                PRIMARY KEY (id, device_id)
+            )`,
+        },
+        {
+            sql: `CREATE TABLE IF NOT EXISTS stock_movements (
+                id INTEGER,
+                device_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                quantity_change INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT,
+                PRIMARY KEY (id, device_id)
+            )`,
+        },
     ]);
 };
