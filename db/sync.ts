@@ -64,13 +64,19 @@ export const registerDevice = async (name: string): Promise<number> => {
 };
 
 export const pushToTurso = async (deviceId: number): Promise<void> => {
-    const [users, products] = await Promise.all([
-        dbResult.getAllAsync<{ id: number; name: string; created_at: string }>('SELECT id, name, created_at FROM users'),
+    const [users, products, closings] = await Promise.all([
+        dbResult.getAllAsync<{ id: number; name: string; created_at: string }>(
+            'SELECT id, name, created_at FROM users'
+        ),
         dbResult.getAllAsync<{
             id: number; name: string; price: number; cost_price: number;
             margin_percentage: number; barcode: string | null; stock: number;
             is_active: number; created_at: string;
         }>('SELECT id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at FROM products'),
+        dbResult.getAllAsync<{
+            id: number; opened_at: string; closed_at: string;
+            total_sales: number; summary_json: string; created_at: string;
+        }>('SELECT id, opened_at, closed_at, total_sales, summary_json, created_at FROM cash_closings'),
     ]);
 
     const statements: Array<{ sql: string; args?: (string | number | null)[] }> = [];
@@ -81,7 +87,6 @@ export const pushToTurso = async (deviceId: number): Promise<void> => {
             args: [u.id, deviceId, u.name, u.created_at],
         });
     }
-
     for (const p of products) {
         statements.push({
             sql: `INSERT OR REPLACE INTO products
@@ -91,34 +96,41 @@ export const pushToTurso = async (deviceId: number): Promise<void> => {
                    p.barcode ?? null, p.stock, p.is_active, p.created_at],
         });
     }
+    for (const c of closings) {
+        statements.push({
+            sql: `INSERT OR IGNORE INTO cash_closings
+                  (device_id, opened_at, closed_at, total_sales, summary_json, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [deviceId, c.opened_at, c.closed_at, c.total_sales, c.summary_json, c.created_at],
+        });
+    }
 
     if (statements.length > 0) await tursoExecute(statements);
-
     await saveSetting('last_sync_at', new Date().toISOString());
 };
 
+// pushToTurso already includes all local cash_closings, so this is just an alias
 export const pushClosingToTurso = async (
     deviceId: number,
-    openedAt: string,
-    closedAt: string,
-    totalSales: number,
-    summaryJson: string,
+    _openedAt: string,
+    _closedAt: string,
+    _totalSales: number,
+    _summaryJson: string,
 ): Promise<void> => {
     await pushToTurso(deviceId);
-    await tursoExecute([{
-        sql: `INSERT INTO cash_closings (device_id, opened_at, closed_at, total_sales, summary_json)
-              VALUES (?, ?, ?, ?, ?)`,
-        args: [deviceId, openedAt, closedAt, totalSales, summaryJson],
-    }]);
-    await saveSetting('last_sync_at', new Date().toISOString());
 };
 
 export const restoreFromTurso = async (deviceId: number): Promise<void> => {
-    const [userResults, productResults] = await tursoExecute([
+    const [userResults, productResults, closingResults] = await tursoExecute([
         { sql: 'SELECT id, name, created_at FROM users WHERE device_id = ?', args: [deviceId] },
         {
             sql: `SELECT id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at
                   FROM products WHERE device_id = ?`,
+            args: [deviceId],
+        },
+        {
+            sql: `SELECT opened_at, closed_at, total_sales, summary_json, created_at
+                  FROM cash_closings WHERE device_id = ? ORDER BY closed_at ASC`,
             args: [deviceId],
         },
     ]);
@@ -127,7 +139,6 @@ export const restoreFromTurso = async (deviceId: number): Promise<void> => {
         sql: 'INSERT OR REPLACE INTO users (id, name, created_at) VALUES (?, ?, ?)',
         args: [u.id, u.name, u.created_at] as (string | number | null)[],
     }));
-
     const productStmts = (productResults ?? []).map(p => ({
         sql: `INSERT OR REPLACE INTO products
               (id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at)
@@ -135,9 +146,14 @@ export const restoreFromTurso = async (deviceId: number): Promise<void> => {
         args: [p.id, p.name, p.price, p.cost_price, p.margin_percentage,
                p.barcode, p.stock, p.is_active, p.created_at] as (string | number | null)[],
     }));
+    const closingStmts = (closingResults ?? []).map(c => ({
+        sql: `INSERT OR IGNORE INTO cash_closings (opened_at, closed_at, total_sales, summary_json, created_at)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [c.opened_at, c.closed_at, c.total_sales, c.summary_json, c.created_at] as (string | number | null)[],
+    }));
 
-    const all = [...userStmts, ...productStmts];
-    if (all.length > 0) await dbResult.execAsync('BEGIN TRANSACTION');
+    const all = [...userStmts, ...productStmts, ...closingStmts];
+    await dbResult.execAsync('BEGIN TRANSACTION');
     try {
         for (const stmt of all) {
             await dbResult.runAsync(stmt.sql, ...(stmt.args as any[]));
