@@ -148,3 +148,36 @@ Admin → "⚙ Reset (dev)" ofrece:
 - ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
 - ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
 - ✅ Feature 7: Turso backup/restore — push en tiempo real por evento, restore completo, cola offline
+- ⬜ Feature 8: Calibración visual — azul de Gluestack como color primario consistente en toda la app
+- ⬜ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
+- ⬜ Feature 10: Ícono de app — asset para EAS Build (Android adaptive icon)
+- ⬜ Fase de pruebas exhaustivas — flujos completos en dispositivo real antes de build de producción
+
+## Próximos pasos (Features 8–10 + pruebas)
+
+### Feature 8 — Calibración visual
+El azul de Gluestack (`$blue600` / `$blue500`) ya se usa en algunos lugares. Hay que auditarlo y aplicarlo de forma consistente como color primario en botones de acción principal, chips activos, badges, indicadores de estado y links. El resto de la UI usa grises neutros de NativeWind — no tocar esos.
+
+### Feature 9 — Categorías en el POS
+- Nueva columna `category` en la tabla `products` (migración `ALTER TABLE`)
+- CRUD de categoría en `app/admin/products/` (selector al crear/editar producto)
+- Chips de filtro horizontal en `app/index.tsx` sobre la grilla — "Todos" + una chip por categoría con productos activos
+- Filtrado client-side sobre `products` ya cargados (sin query extra)
+
+### Feature 10 — Ícono de app
+- Asset en `assets/` (1024×1024 PNG, fondo azul con inicial o logo)
+- Configurar `icon`, `android.adaptiveIcon.foregroundImage` y `android.adaptiveIcon.backgroundColor` en `app.json`
+- Requiere rebuild del APK con EAS Build
+
+### Fase de pruebas exhaustivas
+Flujos a cubrir antes de build de producción:
+1. Venta completa: agregar al carrito → checkout con PIN → stock se descuenta → sube a Turso
+2. Stock bajo: badge rojo aparece → recepción → stock sube → movimiento en Turso
+3. Faltante: se registra → stock baja → movimiento en Turso
+4. Cierre de caja: reporte correcto → Excel exporta → datos suben a Turso
+5. Sin conexión: hacer venta → sin red → pending_sync=true → volver la red → siguiente venta flush todo
+6. Primer inicio (nuevo): wipe completo → configurar nuevo dispositivo → operar normalmente
+7. Restauración: wipe completo → "Restaurar copia" → todos los datos vuelven desde Turso
+8. Historial + filtros: período actual, hoy, semana, mes, todos — datos correctos en cada uno
+9. Excel historial: 3 hojas con columnas ajustadas y datos correctos
+10. Admin: productos, usuarios, PINs, inventario — CRUD completo sin errores
