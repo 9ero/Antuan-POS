@@ -113,10 +113,12 @@ export default function Layout() {
 
                         {step === 'choice' && (
                             <VStack space="md">
-                                <Button size="xl" onPress={() => setStep('new-name')}>
-                                    <ButtonText>Configurar nuevo dispositivo</ButtonText>
+                                <Button size="lg" onPress={() => setStep('new-name')}>
+                                    <ButtonText numberOfLines={2} textAlign="center">
+                                        Nuevo dispositivo
+                                    </ButtonText>
                                 </Button>
-                                <Button size="xl" variant="outline" onPress={handleShowRestoreList}>
+                                <Button size="lg" variant="outline" onPress={handleShowRestoreList}>
                                     <ButtonText>Restaurar copia existente</ButtonText>
                                 </Button>
                             </VStack>
