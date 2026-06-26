@@ -64,6 +64,7 @@ export const registerDevice = async (name: string): Promise<number> => {
 };
 
 export const pushToTurso = async (deviceId: number): Promise<void> => {
+    await initTursoSchema(); // idempotent — ensures all tables exist before any write
     const [users, products, closings, txs, items, movements] = await Promise.all([
         dbResult.getAllAsync<{ id: number; name: string; created_at: string }>(
             'SELECT id, name, created_at FROM users'

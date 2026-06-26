@@ -1,9 +1,12 @@
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { isConfigured } from '@/db/turso';
 import { getDeviceConfig, pushToTurso, getSetting } from '@/db/sync';
+import { dbResult } from '@/db/database';
+
+const __DEV__ = process.env.NODE_ENV !== 'production';
 
 export default function AdminDashboard() {
     const router = useRouter();
@@ -119,6 +122,45 @@ export default function AdminDashboard() {
                 >
                     <Text className="text-red-600 text-center font-bold">Salir de Admin</Text>
                 </TouchableOpacity>
+
+                {__DEV__ && (
+                    <TouchableOpacity
+                        className="p-3 mt-2"
+                        onPress={() => Alert.alert(
+                            'Reset (dev)',
+                            '¿Qué querés borrar?',
+                            [
+                                { text: 'Cancelar', style: 'cancel' },
+                                {
+                                    text: 'Solo config Turso',
+                                    onPress: async () => {
+                                        await dbResult.execAsync('DELETE FROM settings');
+                                        Alert.alert('Listo', 'Reiniciá la app para ver la pantalla de configuración. Los datos locales quedan intactos.');
+                                    },
+                                },
+                                {
+                                    text: 'Todo (wipe completo)',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        await dbResult.execAsync(`
+                                            DELETE FROM transaction_items;
+                                            DELETE FROM transactions;
+                                            DELETE FROM stock_movements;
+                                            DELETE FROM cash_closings;
+                                            DELETE FROM checkout_pins;
+                                            DELETE FROM users;
+                                            DELETE FROM products;
+                                            DELETE FROM settings;
+                                        `);
+                                        Alert.alert('Listo', 'Base de datos local vaciada. Reiniciá la app.');
+                                    },
+                                },
+                            ]
+                        )}
+                    >
+                        <Text className="text-gray-300 text-center text-xs">⚙ Reset (dev)</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </SafeAreaView>
     );
