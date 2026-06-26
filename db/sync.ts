@@ -210,7 +210,7 @@ export const pushClosingToTurso = async (
 };
 
 export const restoreFromTurso = async (deviceId: number): Promise<void> => {
-    const [userResults, productResults, closingResults] = await tursoExecute([
+    const [userResults, productResults, closingResults, txResults, itemResults, movResults] = await tursoExecute([
         { sql: 'SELECT id, name, created_at FROM users WHERE device_id = ?', args: [deviceId] },
         {
             sql: `SELECT id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at
@@ -222,30 +222,60 @@ export const restoreFromTurso = async (deviceId: number): Promise<void> => {
                   FROM cash_closings WHERE device_id = ? ORDER BY closed_at ASC`,
             args: [deviceId],
         },
+        {
+            sql: 'SELECT id, user_id, total, created_at FROM transactions WHERE device_id = ? ORDER BY id ASC',
+            args: [deviceId],
+        },
+        {
+            sql: `SELECT id, transaction_id, product_id, price_at_purchase, quantity
+                  FROM transaction_items WHERE device_id = ? ORDER BY id ASC`,
+            args: [deviceId],
+        },
+        {
+            sql: `SELECT id, product_id, quantity_change, reason, created_at
+                  FROM stock_movements WHERE device_id = ? ORDER BY id ASC`,
+            args: [deviceId],
+        },
     ]);
 
-    const userStmts = (userResults ?? []).map(u => ({
-        sql: 'INSERT OR REPLACE INTO users (id, name, created_at) VALUES (?, ?, ?)',
-        args: [u.id, u.name, u.created_at] as (string | number | null)[],
-    }));
-    const productStmts = (productResults ?? []).map(p => ({
-        sql: `INSERT OR REPLACE INTO products
-              (id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [p.id, p.name, p.price, p.cost_price, p.margin_percentage,
-               p.barcode, p.stock, p.is_active, p.created_at] as (string | number | null)[],
-    }));
-    const closingStmts = (closingResults ?? []).map(c => ({
-        sql: `INSERT OR IGNORE INTO cash_closings (opened_at, closed_at, total_sales, summary_json, created_at)
-              VALUES (?, ?, ?, ?, ?)`,
-        args: [c.opened_at, c.closed_at, c.total_sales, c.summary_json, c.created_at] as (string | number | null)[],
-    }));
+    const stmts: Array<{ sql: string; args: (string | number | null)[] }> = [
+        ...(userResults ?? []).map(u => ({
+            sql: 'INSERT OR REPLACE INTO users (id, name, created_at) VALUES (?, ?, ?)',
+            args: [u.id, u.name, u.created_at] as (string | number | null)[],
+        })),
+        ...(productResults ?? []).map(p => ({
+            sql: `INSERT OR REPLACE INTO products
+                  (id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [p.id, p.name, p.price, p.cost_price, p.margin_percentage,
+                   p.barcode, p.stock, p.is_active, p.created_at] as (string | number | null)[],
+        })),
+        ...(closingResults ?? []).map(c => ({
+            sql: `INSERT OR IGNORE INTO cash_closings (opened_at, closed_at, total_sales, summary_json, created_at)
+                  VALUES (?, ?, ?, ?, ?)`,
+            args: [c.opened_at, c.closed_at, c.total_sales, c.summary_json, c.created_at] as (string | number | null)[],
+        })),
+        ...(txResults ?? []).map(t => ({
+            sql: 'INSERT OR IGNORE INTO transactions (id, user_id, total, created_at) VALUES (?, ?, ?, ?)',
+            args: [t.id, t.user_id ?? null, t.total, t.created_at] as (string | number | null)[],
+        })),
+        ...(itemResults ?? []).map(i => ({
+            sql: `INSERT OR IGNORE INTO transaction_items
+                  (id, transaction_id, product_id, price_at_purchase, quantity)
+                  VALUES (?, ?, ?, ?, ?)`,
+            args: [i.id, i.transaction_id, i.product_id, i.price_at_purchase, i.quantity] as (string | number | null)[],
+        })),
+        ...(movResults ?? []).map(m => ({
+            sql: `INSERT OR IGNORE INTO stock_movements (id, product_id, quantity_change, reason, created_at)
+                  VALUES (?, ?, ?, ?, ?)`,
+            args: [m.id, m.product_id, m.quantity_change, m.reason, m.created_at] as (string | number | null)[],
+        })),
+    ];
 
-    const all = [...userStmts, ...productStmts, ...closingStmts];
     await dbResult.execAsync('BEGIN TRANSACTION');
     try {
-        for (const stmt of all) {
-            await dbResult.runAsync(stmt.sql, ...(stmt.args as any[]));
+        for (const s of stmts) {
+            await dbResult.runAsync(s.sql, ...(s.args as any[]));
         }
         await dbResult.execAsync('COMMIT');
     } catch (e) {
