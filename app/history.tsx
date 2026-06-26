@@ -1,7 +1,11 @@
 import { Stack, useRouter } from 'expo-router';
 import { useState, useCallback, useMemo } from 'react';
-import { getTransactions, getUsers, TransactionDetail, deleteAllTransactions } from '@/db/queries';
-import { User } from '@/db/schemas';
+import { ScrollView as RNScrollView } from 'react-native';
+import {
+    getTransactions, getUsers, getProducts, getCurrentPeriodStart,
+    TransactionDetail, deleteAllTransactions,
+} from '@/db/queries';
+import { User, Product } from '@/db/schemas';
 import { useFocusEffect } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';
@@ -36,22 +40,27 @@ import {
     useToast,
 } from '@gluestack-ui/themed';
 
-type Period = 'all' | 'today' | 'week' | 'month';
+type Period = 'period' | 'today' | 'week' | 'month' | 'all';
 
 const PERIOD_LABELS: Record<Period, string> = {
-    all: 'Todo',
+    period: 'Período',
     today: 'Hoy',
-    week: 'Semana',
-    month: 'Mes',
+    week: '7 días',
+    month: '30 días',
+    all: 'Todo',
 };
 
 const fmt = (d: Date) =>
     `${d.getDate().toString().padStart(2, '0')}_${(d.getMonth() + 1).toString().padStart(2, '0')}_${d.getFullYear()}`;
 
+const fmtCRC = (n: number) => `₡${Math.round(n).toLocaleString('es-CR')}`;
+
 export default function HistoryScreen() {
     const [transactions, setTransactions] = useState<TransactionDetail[]>([]);
     const [users, setUsers] = useState<User[]>([]);
-    const [period, setPeriod] = useState<Period>('all');
+    const [products, setProducts] = useState<Product[]>([]);
+    const [periodStart, setPeriodStart] = useState<string>('');
+    const [period, setPeriod] = useState<Period>('period');
     const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
     const [showUserModal, setShowUserModal] = useState(false);
     const [showClearModal, setShowClearModal] = useState(false);
@@ -66,15 +75,30 @@ export default function HistoryScreen() {
     );
 
     const loadAll = async () => {
-        const [txs, us] = await Promise.all([getTransactions(), getUsers()]);
+        const [txs, us, prods, ps] = await Promise.all([
+            getTransactions(),
+            getUsers(),
+            getProducts(),
+            getCurrentPeriodStart(),
+        ]);
         setTransactions(txs);
         setUsers(us);
+        setProducts(prods);
+        setPeriodStart(ps);
     };
+
+    // SQLite CURRENT_TIMESTAMP stores UTC as 'YYYY-MM-DD HH:MM:SS' (no timezone marker).
+    // JS parses that as local time, causing a 6-hour drift vs ISO strings from toISOString().
+    // Only the 'period' filter mixes both formats, so we normalise to UTC explicitly there.
+    const toUTC = (s: string) => new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
 
     const filtered = useMemo(() => {
         let result = transactions;
 
-        if (period !== 'all') {
+        if (period === 'period' && periodStart) {
+            const start = toUTC(periodStart);
+            result = result.filter(t => t.created_at && toUTC(t.created_at) >= start);
+        } else if (period !== 'all') {
             const cutoff = new Date();
             if (period === 'today') cutoff.setHours(0, 0, 0, 0);
             else if (period === 'week') cutoff.setDate(cutoff.getDate() - 7);
@@ -87,7 +111,54 @@ export default function HistoryScreen() {
         }
 
         return result;
-    }, [transactions, period, selectedUserId]);
+    }, [transactions, period, selectedUserId, periodStart]);
+
+    const stats = useMemo(() => {
+        if (filtered.length === 0) return null;
+
+        const refDate = period === 'period' && periodStart ? new Date(periodStart) : (() => {
+            const d = new Date();
+            if (period === 'today') d.setHours(0, 0, 0, 0);
+            else if (period === 'week') d.setDate(d.getDate() - 7);
+            else if (period === 'month') d.setMonth(d.getMonth() - 1);
+            else d.setFullYear(2000);
+            return d;
+        })();
+        const periodDays = Math.max((Date.now() - refDate.getTime()) / 86400000, 1);
+
+        const costMap = new Map(products.map(p => [p.name, p.cost_price ?? 0]));
+        const stockMap = new Map(products.map(p => [p.name, p.stock ?? 0]));
+
+        const byProduct = new Map<string, { units: number; revenue: number; cost: number }>();
+        const byUser = new Map<string, number>();
+
+        for (const t of filtered) {
+            byUser.set(t.user_name, (byUser.get(t.user_name) ?? 0) + t.total);
+            for (const item of t.items) {
+                const e = byProduct.get(item.product_name) ?? { units: 0, revenue: 0, cost: 0 };
+                e.units += item.quantity;
+                e.revenue += item.price * item.quantity;
+                e.cost += (costMap.get(item.product_name) ?? 0) * item.quantity;
+                byProduct.set(item.product_name, e);
+            }
+        }
+
+        const productArr = [...byProduct.entries()].sort((a, b) => b[1].units - a[1].units);
+        const topProduct = productArr[0];
+        const topUser = [...byUser.entries()].sort((a, b) => b[1] - a[1])[0];
+        const estimatedProfit = [...byProduct.values()].reduce((s, p) => s + p.revenue - p.cost, 0);
+
+        const burnRates = productArr
+            .map(([name, d]) => {
+                const dailyRate = d.units / periodDays;
+                const stock = stockMap.get(name) ?? 0;
+                const daysLeft = dailyRate > 0 ? Math.round(stock / dailyRate) : null;
+                return { name, units: d.units, dailyRate, daysLeft, stock };
+            })
+            .slice(0, 5);
+
+        return { topProduct, topUser, estimatedProfit, burnRates };
+    }, [filtered, products, periodStart, period]);
 
     const totalAmount = filtered.reduce((s, t) => s + t.total, 0);
     const avgAmount = filtered.length > 0 ? totalAmount / filtered.length : 0;
@@ -108,7 +179,6 @@ export default function HistoryScreen() {
                 return;
             }
 
-            // Sheet 1: detail
             const detailData = filtered.map(t => ({
                 ID: t.id,
                 Fecha: formatDate(t.created_at),
@@ -117,7 +187,6 @@ export default function HistoryScreen() {
                 Productos: t.items.map(i => `${i.quantity} ${i.product_name}`).join(', '),
             }));
 
-            // Sheet 2: by user
             const byUser = new Map<string, { total: number; count: number; products: Map<string, number> }>();
             for (const t of filtered) {
                 if (!byUser.has(t.user_name)) byUser.set(t.user_name, { total: 0, count: 0, products: new Map() });
@@ -140,7 +209,6 @@ export default function HistoryScreen() {
                         .join(', '),
                 }));
 
-            // Sheet 3: by product
             const byProduct = new Map<string, { units: number; revenue: number }>();
             for (const t of filtered) {
                 for (const item of t.items) {
@@ -213,7 +281,7 @@ export default function HistoryScreen() {
                     ),
                 });
                 setShowClearModal(false);
-                setPeriod('all');
+                setPeriod('period');
                 setSelectedUserId(null);
                 loadAll();
             } else {
@@ -261,23 +329,25 @@ export default function HistoryScreen() {
                 </HStack>
 
                 {/* Period filter */}
-                <HStack space="sm" mb="$2">
-                    {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
-                        <Pressable
-                            key={p}
-                            flex={1}
-                            onPress={() => setPeriod(p)}
-                            bg={period === p ? '$blue600' : '$coolGray100'}
-                            borderRadius="$md"
-                            py="$1.5"
-                            alignItems="center"
-                        >
-                            <Text size="xs" fontWeight="$semibold" color={period === p ? '$white' : '$coolGray600'}>
-                                {PERIOD_LABELS[p]}
-                            </Text>
-                        </Pressable>
-                    ))}
-                </HStack>
+                <RNScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <HStack space="sm" mb="$2">
+                        {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
+                            <Pressable
+                                key={p}
+                                onPress={() => setPeriod(p)}
+                                bg={period === p ? '$blue600' : '$coolGray100'}
+                                borderRadius="$md"
+                                px="$3"
+                                py="$1.5"
+                                alignItems="center"
+                            >
+                                <Text size="xs" fontWeight="$semibold" color={period === p ? '$white' : '$coolGray600'}>
+                                    {PERIOD_LABELS[p]}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </HStack>
+                </RNScrollView>
 
                 {/* User filter */}
                 <Pressable
@@ -302,7 +372,7 @@ export default function HistoryScreen() {
                 </Pressable>
             </Box>
 
-            {/* Summary card */}
+            {/* Summary bar */}
             {filtered.length > 0 && (
                 <Box bg="$blue600" px="$4" py="$3">
                     <HStack justifyContent="space-between">
@@ -312,11 +382,11 @@ export default function HistoryScreen() {
                         </VStack>
                         <VStack alignItems="center" flex={1}>
                             <Text color="$white" size="xs" opacity={0.8}>Total</Text>
-                            <Text color="$white" fontWeight="$bold">₡{totalAmount.toFixed(0)}</Text>
+                            <Text color="$white" fontWeight="$bold">{fmtCRC(totalAmount)}</Text>
                         </VStack>
                         <VStack alignItems="center" flex={1}>
                             <Text color="$white" size="xs" opacity={0.8}>Promedio</Text>
-                            <Text color="$white" fontWeight="$bold">₡{avgAmount.toFixed(0)}</Text>
+                            <Text color="$white" fontWeight="$bold">{fmtCRC(avgAmount)}</Text>
                         </VStack>
                     </HStack>
                 </Box>
@@ -324,16 +394,75 @@ export default function HistoryScreen() {
 
             <ScrollView contentContainerStyle={{ padding: 16 }}>
                 <VStack space="md">
+                    {/* Stats card */}
+                    {stats && (
+                        <Card variant="elevated" p="$4">
+                            <Heading size="sm" mb="$3">Estadísticas del período</Heading>
+
+                            <HStack space="md" mb="$3">
+                                <VStack flex={1} bg="$blue50" p="$3" borderRadius="$md">
+                                    <Text size="xs" color="$coolGray500" mb="$1">Producto más vendido</Text>
+                                    <Text fontWeight="$bold" size="sm">{stats.topProduct?.[0] ?? '—'}</Text>
+                                    <Text size="xs" color="$blue600">{stats.topProduct?.[1].units ?? 0} uds</Text>
+                                </VStack>
+                                <VStack flex={1} bg="$green50" p="$3" borderRadius="$md">
+                                    <Text size="xs" color="$coolGray500" mb="$1">Cliente top</Text>
+                                    <Text fontWeight="$bold" size="sm">{stats.topUser?.[0] ?? '—'}</Text>
+                                    <Text size="xs" color="$green600">{fmtCRC(stats.topUser?.[1] ?? 0)}</Text>
+                                </VStack>
+                            </HStack>
+
+                            <Box bg="$purple50" p="$3" borderRadius="$md" mb="$3">
+                                <Text size="xs" color="$coolGray500" mb="$1">Ganancia estimada del período</Text>
+                                <Text fontWeight="$bold" color="$purple700">{fmtCRC(stats.estimatedProfit)}</Text>
+                                <Text size="xs" color="$coolGray400">Basada en costos actuales de productos</Text>
+                            </Box>
+
+                            {stats.burnRates.length > 0 && (
+                                <>
+                                    <Text size="xs" fontWeight="$semibold" color="$coolGray500" mb="$2">
+                                        CONSUMO MÁS RÁPIDO (top {stats.burnRates.length})
+                                    </Text>
+                                    <VStack space="xs">
+                                        {stats.burnRates.map((p, i) => (
+                                            <HStack key={p.name} justifyContent="space-between" alignItems="center"
+                                                py="$1.5" borderBottomWidth={i < stats.burnRates.length - 1 ? 1 : 0}
+                                                borderColor="$coolGray100">
+                                                <HStack alignItems="center" space="xs" flex={1}>
+                                                    <Text size="xs" color="$orange500" fontWeight="$bold">#{i + 1}</Text>
+                                                    <Text size="sm" flex={1} numberOfLines={1}>{p.name}</Text>
+                                                </HStack>
+                                                <VStack alignItems="flex-end">
+                                                    <Text size="xs" color="$coolGray600">{p.dailyRate.toFixed(1)} uds/día</Text>
+                                                    <Text size="xs" color={
+                                                        p.daysLeft === null ? '$coolGray400' :
+                                                        p.daysLeft <= 3 ? '$red500' :
+                                                        p.daysLeft <= 7 ? '$orange500' : '$green600'
+                                                    }>
+                                                        {p.daysLeft === null ? 'sin consumo'
+                                                            : p.stock === 0 ? 'agotado'
+                                                            : `~${p.daysLeft} días`}
+                                                    </Text>
+                                                </VStack>
+                                            </HStack>
+                                        ))}
+                                    </VStack>
+                                </>
+                            )}
+                        </Card>
+                    )}
+
+                    {/* Transaction list */}
                     {filtered.map(item => (
                         <Card key={item.id} variant="elevated" p="$4">
                             <HStack justifyContent="space-between" mb="$2">
                                 <Heading size="sm">{item.user_name || 'Cliente desconocido'}</Heading>
-                                <Text color="$green600" fontWeight="bold">₡{item.total.toFixed(0)}</Text>
+                                <Text color="$green600" fontWeight="bold">{fmtCRC(item.total)}</Text>
                             </HStack>
                             <Box borderTopWidth={1} borderColor="$coolGray100" py="$2" my="$1">
                                 {item.items.map((prod, index) => (
                                     <Text key={index} size="sm" color="$coolGray600">
-                                        {prod.quantity} {prod.product_name} — ₡{(prod.price * prod.quantity).toFixed(0)}
+                                        {prod.quantity} {prod.product_name} — {fmtCRC(prod.price * prod.quantity)}
                                     </Text>
                                 ))}
                             </Box>

@@ -67,15 +67,22 @@ utils/
 - Historial de cierres anteriores con botones Compartir (texto) y Excel
 - `isSubmitting` en botón de confirmación de cierre
 
+## Fechas y timezone
+SQLite `CURRENT_TIMESTAMP` guarda UTC como `'YYYY-MM-DD HH:MM:SS'` (sin Z). JavaScript lo parsea como hora local, causando desfase de 6 h en Costa Rica (UTC-6). Regla: al comparar fechas SQLite contra ISO strings de `new Date().toISOString()`, normalizar ambas con:
+```typescript
+const toUTC = (s: string) => new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+```
+Los filtros que comparan fecha SQLite contra otra fecha SQLite (Hoy/Semana/Mes) no necesitan corrección porque el desfase se cancela en ambos lados.
+
 ## Estado de features (roadmap aprobado)
 - ✅ Feature 1: Precio de costo + margen (20/30/40%) en productos
 - ✅ Feature 2: Filtros en historial + Excel mejorado (3 hojas: Detalle, Por Cliente, Por Producto)
 - ✅ Feature 3: PIN de checkout por usuario (reusable, gestionado desde panel de Usuarios)
 - ✅ Feature 4: Inventario + movimientos de stock + extravíos
 - ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
-- ⬜ Feature 6: Estadísticas y reportes (velocidad de agotamiento, ganancia por producto)
+- ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
 - ⬜ Feature 7: Turso backup/restore (push en cierre de caja, pull histórico bajo demanda)
 
-## Próximos pasos (Feature 6 — Estadísticas y reportes)
-Ampliar `app/history.tsx` con sección de estadísticas: producto más vendido, ganancia estimada del período, velocidad de agotamiento por producto (`stock_actual / tasa_diaria`).
-Al cerrar caja → datos se subirán a Turso (Feature 7).
+## Próximos pasos (Feature 7 — Turso backup/restore)
+`db/turso.ts` + `db/sync.ts`. Push automático al cerrar caja. Pull histórico bajo demanda. Restauración de catálogo (products + users) en reinstalación.
+Al cerrar caja → datos se subirán a Turso.
