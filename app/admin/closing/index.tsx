@@ -10,6 +10,8 @@ import {
     getCurrentPeriodStart, buildClosingSummary,
     createCashClosing, getCashClosings,
 } from '@/db/queries';
+import { isConfigured } from '@/db/turso';
+import { getDeviceConfig, pushClosingToTurso, getSetting } from '@/db/sync';
 import {
     Box,
     Text,
@@ -225,6 +227,12 @@ export default function CashClosingScreen() {
     const [expandedHistorySummary, setExpandedHistorySummary] = useState<ClosingSummary | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle');
+    const [lastSync, setLastSync] = useState<string | null>(null);
+
+    useCallback(() => {
+        getSetting('last_sync_at').then(setLastSync);
+    }, []);
 
     const stats = useMemo(() => summary ? computeStats(summary) : null, [summary]);
 
@@ -349,6 +357,20 @@ export default function CashClosingScreen() {
         setExpandedClosingId(null);
         setExpandedHistorySummary(null);
         loadAll();
+
+        // Push to Turso in background — don't block the UI
+        if (isConfigured) {
+            setSyncStatus('syncing');
+            getDeviceConfig().then(cfg => {
+                if (!cfg) return;
+                return pushClosingToTurso(cfg.deviceId, periodStart, closedAt, s.totalRevenue, JSON.stringify(s));
+            }).then(() => {
+                setSyncStatus('ok');
+                setLastSync(new Date().toISOString());
+            }).catch(() => {
+                setSyncStatus('error');
+            });
+        }
     };
 
     const toggleHistoryClosing = (closing: CashClosing) => {
@@ -398,6 +420,25 @@ export default function CashClosingScreen() {
                                 </Box>
                             </HStack>
                         ) : null}
+
+                        {/* Sync status */}
+                        {isConfigured && syncStatus !== 'idle' && (
+                            <HStack space="xs" alignItems="center" mt="$2">
+                                <Text size="xs" color={
+                                    syncStatus === 'syncing' ? '$coolGray400' :
+                                    syncStatus === 'ok' ? '$green600' : '$red500'
+                                }>
+                                    {syncStatus === 'syncing' ? '↑ Sincronizando con la nube...' :
+                                     syncStatus === 'ok' ? '✓ Respaldo en la nube actualizado' :
+                                     '✗ Error al sincronizar — reintentá desde Admin'}
+                                </Text>
+                            </HStack>
+                        )}
+                        {isConfigured && syncStatus === 'idle' && lastSync && (
+                            <Text size="xs" color="$coolGray400" mt="$2">
+                                Último respaldo: {new Date(lastSync).toLocaleString('es-CR')}
+                            </Text>
+                        )}
                     </Card>
 
                     {/* By user */}

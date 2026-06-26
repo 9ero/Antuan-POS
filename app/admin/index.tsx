@@ -1,14 +1,51 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, useEffect } from 'react';
+import { isConfigured } from '@/db/turso';
+import { getDeviceConfig, pushToTurso, getSetting } from '@/db/sync';
 
 export default function AdminDashboard() {
     const router = useRouter();
+    const [deviceName, setDeviceName] = useState<string | null>(null);
+    const [lastSync, setLastSync] = useState<string | null>(null);
+    const [syncing, setSyncing] = useState(false);
+    const [syncMsg, setSyncMsg] = useState('');
+
+    useEffect(() => {
+        Promise.all([getDeviceConfig(), getSetting('last_sync_at')]).then(([cfg, sync]) => {
+            setDeviceName(cfg?.deviceName ?? null);
+            setLastSync(sync);
+        });
+    }, []);
+
+    const handleSync = async () => {
+        setSyncing(true);
+        setSyncMsg('');
+        try {
+            const cfg = await getDeviceConfig();
+            if (!cfg) throw new Error('Dispositivo no configurado');
+            await pushToTurso(cfg.deviceId);
+            const now = new Date().toISOString();
+            setLastSync(now);
+            setSyncMsg('✓ Respaldo completado');
+        } catch (e) {
+            setSyncMsg('✗ Error: ' + (e instanceof Error ? e.message : 'Desconocido'));
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const fmtSync = (s: string | null) =>
+        s ? new Date(s).toLocaleString('es-CR') : 'Nunca';
 
     return (
         <SafeAreaView className="flex-1 bg-gray-50 p-6">
             <Stack.Screen options={{ headerShown: false }} />
-            <Text className="text-3xl font-bold text-gray-800 mb-8">Panel de Admin</Text>
+            <Text className="text-3xl font-bold text-gray-800 mb-2">Panel de Admin</Text>
+            {deviceName && (
+                <Text className="text-sm text-gray-400 mb-6">{deviceName}</Text>
+            )}
 
             <View className="gap-4">
                 <TouchableOpacity
@@ -55,8 +92,29 @@ export default function AdminDashboard() {
                     <Text className="text-2xl text-gray-400">→</Text>
                 </TouchableOpacity>
 
+                {isConfigured && (
+                    <TouchableOpacity
+                        className="bg-blue-50 p-5 rounded-xl border border-blue-100 flex-row items-center justify-between"
+                        onPress={handleSync}
+                        disabled={syncing}
+                    >
+                        <View>
+                            <Text className="text-lg font-bold text-blue-700">
+                                {syncing ? 'Respaldando...' : 'Respaldar en la nube'}
+                            </Text>
+                            <Text className="text-blue-400 text-xs">
+                                {syncMsg || `Último: ${fmtSync(lastSync)}`}
+                            </Text>
+                        </View>
+                        {syncing
+                            ? <ActivityIndicator color="#3b82f6" />
+                            : <Text className="text-2xl text-blue-300">↑</Text>
+                        }
+                    </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
-                    className="bg-red-50 p-6 rounded-xl border border-red-100 mt-8"
+                    className="bg-red-50 p-6 rounded-xl border border-red-100 mt-4"
                     onPress={() => router.replace('/')}
                 >
                     <Text className="text-red-600 text-center font-bold">Salir de Admin</Text>

@@ -65,6 +65,11 @@ export const initDatabase = async () => {
                 summary_json TEXT NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
         `);
 
         // Migration for existing databases
