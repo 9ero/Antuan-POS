@@ -23,21 +23,28 @@ POS móvil offline-first para tienda pequeña en Costa Rica. El **comprador** (n
 ## Estructura de archivos clave
 ```
 app/
+  _layout.tsx        — Provider global + pantalla de setup Turso (primer inicio)
   index.tsx          — POS principal: grilla de productos, carrito, modal de checkout (usuario + PIN)
   history.tsx        — Historial de ventas con filtros y export Excel (3 hojas, columnas auto-ajustadas)
   admin/
     _layout.tsx      — Guard con PIN 1234
-    index.tsx        — Dashboard de admin
+    index.tsx        — Dashboard de admin + botón "Respaldar en la nube" + reset dev
     products/        — CRUD de productos con precio costo + margen
     users/           — CRUD de usuarios con gestión de PINs integrada por tarjeta
-    inventory/       — Stock, recepciones y extravíos con historial de movimientos
+    inventory/       — Stock, recepciones y faltantes con historial de movimientos
     closing/         — Cierre de caja: reporte período, rankings, historial de cierres, Excel
 db/
   database.ts        — initDatabase(), CREATE TABLE IF NOT EXISTS, migraciones try/catch
-  queries.ts         — todas las funciones de acceso a DB
+  queries.ts         — todas las funciones de acceso a DB (createTransaction devuelve transactionId;
+                       addStock/registerLoss devuelven movementId)
   schemas.ts         — Zod schemas
+  turso.ts           — Cliente HTTP para Turso (fetch nativo, sin @libsql/client)
+  sync.ts            — Lógica de backup/restore: pushToTurso, pushTransactionToTurso,
+                       pushStockMovementToTurso, restoreFromTurso, cola offline pending_sync
 utils/
   pin.ts             — generatePin() sin caracteres ambiguos (sin O/0/I/1)
+.env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN (gitignored)
+.env.example         — Plantilla de credenciales (commiteado)
 ```
 
 ## Schema de DB local (expo-sqlite, WAL mode)
@@ -50,8 +57,9 @@ utils/
 | `checkout_pins` | id, pin, user_id FK, is_used, created_at |
 | `stock_movements` | id, product_id, quantity_change, reason, created_at |
 | `cash_closings` | id, opened_at, closed_at, total_sales, summary_json, created_at |
+| `settings` | key (PK), value — config del dispositivo y timestamps de sync |
 
-**Migraciones:** patrón try/catch en `db/database.ts`. `CREATE TABLE IF NOT EXISTS` para tablas nuevas; `ALTER TABLE` para columnas nuevas en tablas existentes.
+**Migraciones:** patrón try/catch en `db/database.ts`. `CREATE TABLE IF NOT EXISTS` para tablas nuevas; `ALTER TABLE` para columnas nuevas en tablas existentes. Expo/React Native no maneja migraciones automáticamente.
 
 **Transacciones atómicas:** `BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK` en queries que modifican múltiples tablas.
 
@@ -82,6 +90,56 @@ Helper `toISO(s)` normaliza strings SQLite a ISO antes de pasarlos a `new Date()
 
 **En JS (filtros client-side):** usar `toUTC(s)` solo cuando se compara fecha SQLite contra ISO string. Filtros SQLite vs SQLite (Hoy/Semana/Mes) no necesitan corrección porque el desfase se cancela en ambos lados.
 
+## Feature 7 — Turso backup/restore
+
+### Arquitectura
+- Turso como cold storage cloud, **no** sync en tiempo real
+- Cliente HTTP nativo (`fetch` a `/v2/pipeline`) — sin `@libsql/client` para evitar problemas de bundler en React Native
+- Variables de entorno con prefijo `EXPO_PUBLIC_` (baked en build time): `EXPO_PUBLIC_TURSO_URL`, `EXPO_PUBLIC_TURSO_TOKEN`
+- `isConfigured` en `db/turso.ts` — false si las vars contienen el placeholder `your-database`
+
+### Schema Turso (tablas con PK compuesta `id + device_id`)
+| Tabla | Notas |
+|---|---|
+| `devices` | id AUTOINCREMENT, name, created_at |
+| `users` | PK (id, device_id) |
+| `products` | PK (id, device_id) |
+| `transactions` | PK (id, device_id) |
+| `transaction_items` | PK (id, device_id) |
+| `stock_movements` | PK (id, device_id) |
+| `cash_closings` | id AUTOINCREMENT, device_id, opened_at, closed_at, total_sales, summary_json |
+
+`initTursoSchema()` usa `CREATE TABLE IF NOT EXISTS` — idempotente, se llama al inicio de `pushToTurso` y en el flujo de setup.
+
+### Flujo de primer inicio
+`app/_layout.tsx` detecta si Turso está configurado y no hay `device_turso_id` en `settings` → muestra pantalla de setup con dos opciones:
+1. **Nuevo dispositivo**: ingresa nombre → `registerDevice(name)` → guarda `device_turso_id` + `device_name` en settings
+2. **Restaurar copia**: `listDevices()` → lista de dispositivos con último cierre → seleccionar → `restoreFromTurso(deviceId)` → restaura **todo** (usuarios, productos, transacciones, ítems, movimientos, cierres) en una transacción atómica local
+
+### Qué se respalda y cuándo
+| Dato | Cuándo sube a Turso |
+|---|---|
+| Usuarios + productos + stock | Manual ("Respaldar en la nube") y en cada cierre de caja |
+| Cierres de caja | Manual y en cada cierre de caja |
+| Transacciones + ítems | **Inmediatamente** después de cada venta (background) |
+| Movimientos de stock | **Inmediatamente** después de cada recepción o faltante (background) |
+
+### Cola offline (`pending_sync`)
+Si un push falla por falta de red, se guarda `pending_sync = 'true'` en settings. En el siguiente intento (venta, movimiento o manual), `withPendingQueue` detecta el flag y hace un `pushToTurso` completo antes de continuar. Si sigue sin red, el flag permanece acumulando hasta que haya conexión.
+
+### Settings relevantes en SQLite local
+| Key | Valor |
+|---|---|
+| `device_turso_id` | ID numérico del dispositivo en Turso |
+| `device_name` | Nombre del punto de venta |
+| `last_sync_at` | ISO timestamp del último push exitoso |
+| `pending_sync` | `'true'` si hay datos sin sincronizar |
+
+### Botón dev (solo en desarrollo)
+Admin → "⚙ Reset (dev)" ofrece:
+- **Solo config Turso**: borra `settings` (el dispositivo "olvida" que está registrado, datos locales intactos)
+- **Wipe completo**: vacía todas las tablas locales (Turso no se toca) — para simular reinstalación y probar restore
+
 ## Estado de features (roadmap aprobado)
 - ✅ Feature 1: Precio de costo + margen (20/30/40%) en productos
 - ✅ Feature 2: Filtros en historial + Excel mejorado (3 hojas: Detalle, Por Cliente, Por Producto)
@@ -89,8 +147,4 @@ Helper `toISO(s)` normaliza strings SQLite a ISO antes de pasarlos a `new Date()
 - ✅ Feature 4: Inventario + movimientos de stock + faltantes
 - ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
 - ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
-- ⬜ Feature 7: Turso backup/restore (push en cierre de caja, pull histórico bajo demanda)
-
-## Próximos pasos (Feature 7 — Turso backup/restore)
-`db/turso.ts` + `db/sync.ts`. Push automático al cerrar caja. Pull histórico bajo demanda. Restauración de catálogo (products + users) en reinstalación.
-Al cerrar caja → datos se subirán a Turso.
+- ✅ Feature 7: Turso backup/restore — push en tiempo real por evento, restore completo, cola offline
