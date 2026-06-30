@@ -6,6 +6,7 @@ import {
     TransactionDetail, deleteAllTransactions,
 } from '@/db/queries';
 import { User, Product } from '@/db/schemas';
+import { ADMIN_PIN } from '@/utils/constants';
 import { useFocusEffect } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';
@@ -269,7 +270,7 @@ export default function HistoryScreen() {
     };
 
     const confirmClear = async () => {
-        if (pin === '1234') {
+        if (pin === ADMIN_PIN) {
             const result = await deleteAllTransactions();
             if (result.success) {
                 toast.show({

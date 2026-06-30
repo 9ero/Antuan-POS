@@ -1,6 +1,7 @@
 import { useRouter, Stack } from 'expo-router';
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ADMIN_PIN } from '@/utils/constants';
 import {
     Box,
     Text,
@@ -22,7 +23,7 @@ export default function AdminLayout() {
     const router = useRouter();
 
     const handleLogin = () => {
-        if (pin === '1234') {
+        if (pin === ADMIN_PIN) {
             setIsAuthenticated(true);
         } else {
             alert('PIN Incorrecto');
@@ -68,7 +69,6 @@ export default function AdminLayout() {
         <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="products/index" options={{ title: 'Productos' }} />
             <Stack.Screen name="users/index" options={{ title: 'Usuarios' }} />
-            <Stack.Screen name="pins/index" options={{ title: 'PINs de Compra' }} />
             <Stack.Screen name="inventory/index" options={{ title: 'Inventario' }} />
             <Stack.Screen name="closing/index" options={{ title: 'Cierre de Caja' }} />
         </Stack>
