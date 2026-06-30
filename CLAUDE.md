@@ -30,6 +30,7 @@ POS móvil offline-first para tienda pequeña en Costa Rica. El **comprador** (n
   };
   ```
   Solo `isDisabled={isSubmitting}` no es suficiente — el re-render puede llegar tarde y un segundo tap escapa.
+- **El stock se gestiona EXCLUSIVAMENTE desde Inventario (recepciones/faltantes) y las ventas.** Al **editar** un producto existente, el campo Stock está **bloqueado** y `updateProduct` **no escribe** la columna `stock` — así un edit de catálogo no pisa el stock real (que pudo cambiar por una venta/recepción mientras el modal estaba abierto). Solo al **crear** un producto se define el stock inicial (vía `addProduct`).
 - Hacer commits solo después de que el usuario pruebe y apruebe los cambios.
 
 ## Estructura de archivos clave

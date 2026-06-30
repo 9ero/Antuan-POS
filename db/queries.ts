@@ -84,8 +84,10 @@ export const addProduct = async (
     return result.lastInsertRowId as number;
 };
 
+// Nota: NO modifica el stock — se gestiona solo desde Inventario (recepciones/faltantes)
+// y las ventas. Editar el catálogo nunca debe pisar el stock real.
 export const updateProduct = async (
-    id: number, name: string, price: number, barcode: string, stock: number,
+    id: number, name: string, price: number, barcode: string,
     costPrice: number = 0, marginPercentage: number = 30, categoryId: number | null = null
 ): Promise<number> => {
     if (barcode) {
@@ -95,8 +97,8 @@ export const updateProduct = async (
         }
     }
     await dbResult.runAsync(
-        'UPDATE products SET name = ?, price = ?, barcode = ?, stock = ?, cost_price = ?, margin_percentage = ?, category_id = ? WHERE id = ?',
-        name, price, barcode, stock, costPrice, marginPercentage, categoryId, id
+        'UPDATE products SET name = ?, price = ?, barcode = ?, cost_price = ?, margin_percentage = ?, category_id = ? WHERE id = ?',
+        name, price, barcode, costPrice, marginPercentage, categoryId, id
     );
     return id;
 };

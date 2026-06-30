@@ -113,7 +113,6 @@ export default function ProductsAdmin() {
                     newProduct.name,
                     finalPrice,
                     newProduct.barcode,
-                    parseInt(newProduct.stock || '0'),
                     finalCost,
                     newProduct.margin_percentage,
                     newProduct.category_id,
@@ -324,10 +323,18 @@ export default function ProductsAdmin() {
                                 )}
                             </FormControl>
 
-                            <FormControl>
-                                <FormControlLabel><FormControlLabelText>Stock</FormControlLabelText></FormControlLabel>
-                                <Input>
-                                    <InputField keyboardType="numeric" value={newProduct.stock} onChangeText={t => setNewProduct({ ...newProduct, stock: t })} />
+                            <FormControl isDisabled={!!editingId}>
+                                <FormControlLabel>
+                                    <FormControlLabelText>
+                                        {editingId ? 'Stock (se gestiona en Inventario)' : 'Stock inicial'}
+                                    </FormControlLabelText>
+                                </FormControlLabel>
+                                <Input isDisabled={!!editingId}>
+                                    <InputField
+                                        keyboardType="numeric"
+                                        value={newProduct.stock}
+                                        onChangeText={t => setNewProduct({ ...newProduct, stock: t })}
+                                    />
                                 </Input>
                             </FormControl>
 
