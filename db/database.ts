@@ -10,6 +10,7 @@ export const initDatabase = async () => {
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -44,7 +45,7 @@ export const initDatabase = async () => {
             CREATE TABLE IF NOT EXISTS checkout_pins (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pin TEXT NOT NULL UNIQUE,
-                is_used INTEGER DEFAULT 0,
+                is_used INTEGER DEFAULT 0, -- DEPRECADA: los PINs son reusables (ligados a usuario, no se consumen). No usar.
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -73,6 +74,14 @@ export const initDatabase = async () => {
         `);
 
         // Migration for existing databases
+        try {
+            await dbResult.execAsync('ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1;');
+        } catch (e) {
+            if (e instanceof Error && !e.message.includes('duplicate column name')) {
+                console.log('Migration error:', e);
+            }
+        }
+
         try {
             await dbResult.execAsync('ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0;');
         } catch (e) {

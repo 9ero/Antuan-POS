@@ -2,6 +2,7 @@ import { Modal, Share, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { User, CheckoutPin, getUsers, addUser, deleteUser, updateUser, getPinsWithUsers, createCheckoutPin, deleteCheckoutPin } from '@/db/queries';
+import { getDeviceConfig, pushPinsToTurso, pushUserToTurso } from '@/db/sync';
 import { generatePin } from '@/utils/pin';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -54,20 +55,27 @@ export default function UsersAdmin() {
 
     useFocusEffect(useCallback(() => { loadAll(); }, []));
 
+    // Sincronización a Turso al instante (fire-and-forget, cola offline si no hay red)
+    const syncPins = () => {
+        getDeviceConfig().then(cfg => { if (cfg) pushPinsToTurso(cfg.deviceId).catch(() => {}); });
+    };
+    const syncUser = (id: number) => {
+        getDeviceConfig().then(cfg => { if (cfg) pushUserToTurso(cfg.deviceId, id).catch(() => {}); });
+    };
+
     // User CRUD
     const handleSaveUser = async () => {
         if (!newName) { alert('El nombre es requerido'); return; }
         if (isSubmitting) return;
         setIsSubmitting(true);
         try {
-            if (editingId) {
-                await updateUser(editingId, newName);
-            } else {
-                await addUser(newName);
-            }
+            const savedId = editingId
+                ? await updateUser(editingId, newName)
+                : await addUser(newName);
             setUserModalVisible(false);
             setNewName('');
             setEditingId(null);
+            syncUser(savedId);
             loadAll();
         } finally {
             setIsSubmitting(false);
@@ -81,8 +89,10 @@ export default function UsersAdmin() {
     };
 
     const handleDeleteUser = async (id: number) => {
-        await deleteCheckoutPin(id);
-        await deleteUser(id);
+        await deleteCheckoutPin(id);  // quita el PIN: un usuario inactivo no debe poder cobrar
+        await deleteUser(id);          // soft delete (is_active = 0)
+        syncPins();
+        syncUser(id);                  // propaga la desactivación a Turso (upsert is_active=0)
         loadAll();
     };
 
@@ -93,6 +103,7 @@ export default function UsersAdmin() {
         try {
             await createCheckoutPin(generatePin(), userId);
             setExpandedPinUserId(null);
+            syncPins();
             loadAll();
         } finally {
             setIsSubmitting(false);
@@ -117,6 +128,7 @@ export default function UsersAdmin() {
         try {
             await createCheckoutPin(cleaned, manualPinUserId!);
             setManualPinUserId(null);
+            syncPins();
             loadAll();
         } finally {
             setIsSubmitting(false);
@@ -129,6 +141,7 @@ export default function UsersAdmin() {
 
     const handleRemovePin = async (userId: number) => {
         await deleteCheckoutPin(userId);
+        syncPins();
         loadAll();
     };
 

@@ -80,6 +80,17 @@ export const initTursoSchema = async (): Promise<void> => {
                 id INTEGER,
                 device_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT,
+                PRIMARY KEY (id, device_id)
+            )`,
+        },
+        {
+            sql: `CREATE TABLE IF NOT EXISTS checkout_pins (
+                id INTEGER,
+                device_id INTEGER NOT NULL,
+                user_id INTEGER,
+                pin TEXT NOT NULL,
                 created_at TEXT,
                 PRIMARY KEY (id, device_id)
             )`,
@@ -143,4 +154,10 @@ export const initTursoSchema = async (): Promise<void> => {
             )`,
         },
     ]);
+
+    // Migración para tablas Turso ya existentes de versiones previas (CREATE IF NOT EXISTS
+    // no agrega columnas). Best-effort: si la columna ya existe, Turso lanza error y se ignora.
+    try {
+        await tursoExecute([{ sql: 'ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1' }]);
+    } catch { /* la columna ya existe */ }
 };

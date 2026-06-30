@@ -9,19 +9,24 @@ export { User, Product, CartItem, Transaction };
 
 // Users
 export const getUsers = async (): Promise<User[]> => {
-    return await dbResult.getAllAsync('SELECT * FROM users ORDER BY name ASC');
+    return await dbResult.getAllAsync('SELECT * FROM users WHERE is_active = 1 ORDER BY name ASC');
 };
 
-export const addUser = async (name: string) => {
-    return await dbResult.runAsync('INSERT INTO users (name) VALUES (?)', name);
+export const addUser = async (name: string): Promise<number> => {
+    const result = await dbResult.runAsync('INSERT INTO users (name) VALUES (?)', name);
+    return result.lastInsertRowId as number;
 };
 
-export const deleteUser = async (id: number) => {
-    return await dbResult.runAsync('DELETE FROM users WHERE id = ?', id);
+// Soft delete: desactiva el usuario en vez de borrarlo, para no orfanar sus transacciones
+// (el historial resuelve el nombre con JOIN users — un DELETE las haría desaparecer).
+export const deleteUser = async (id: number): Promise<number> => {
+    await dbResult.runAsync('UPDATE users SET is_active = 0 WHERE id = ?', id);
+    return id;
 };
 
-export const updateUser = async (id: number, name: string) => {
-    return await dbResult.runAsync('UPDATE users SET name = ? WHERE id = ?', name, id);
+export const updateUser = async (id: number, name: string): Promise<number> => {
+    await dbResult.runAsync('UPDATE users SET name = ? WHERE id = ?', name, id);
+    return id;
 };
 
 // Products
@@ -32,43 +37,47 @@ export const getProducts = async (): Promise<Product[]> => {
 export const addProduct = async (
     name: string, price: number, barcode: string = '', stock: number = 0,
     costPrice: number = 0, marginPercentage: number = 30
-) => {
+): Promise<number> => {
     if (barcode) {
         const existing = await getProductByBarcode(barcode);
         if (existing) {
             if (existing.is_active === 0) {
-                return await dbResult.runAsync(
+                await dbResult.runAsync(
                     'UPDATE products SET name = ?, price = ?, stock = ?, cost_price = ?, margin_percentage = ?, is_active = 1 WHERE id = ?',
                     name, price, stock, costPrice, marginPercentage, existing.id!
                 );
+                return existing.id!;
             }
             throw new Error(`El código de barras "${barcode}" ya está registrado.`);
         }
     }
-    return await dbResult.runAsync(
+    const result = await dbResult.runAsync(
         'INSERT INTO products (name, price, barcode, stock, is_active, cost_price, margin_percentage) VALUES (?, ?, ?, ?, 1, ?, ?)',
         name, price, barcode, stock, costPrice, marginPercentage
     );
+    return result.lastInsertRowId as number;
 };
 
 export const updateProduct = async (
     id: number, name: string, price: number, barcode: string, stock: number,
     costPrice: number = 0, marginPercentage: number = 30
-) => {
+): Promise<number> => {
     if (barcode) {
         const existing = await getProductByBarcode(barcode);
         if (existing && existing.id !== id) {
             throw new Error(`El código de barras "${barcode}" ya pertenece a otro producto.`);
         }
     }
-    return await dbResult.runAsync(
+    await dbResult.runAsync(
         'UPDATE products SET name = ?, price = ?, barcode = ?, stock = ?, cost_price = ?, margin_percentage = ? WHERE id = ?',
         name, price, barcode, stock, costPrice, marginPercentage, id
     );
+    return id;
 };
 
-export const deleteProduct = async (id: number) => {
-    return await dbResult.runAsync('UPDATE products SET is_active = 0 WHERE id = ?', id);
+export const deleteProduct = async (id: number): Promise<number> => {
+    await dbResult.runAsync('UPDATE products SET is_active = 0 WHERE id = ?', id);
+    return id;
 };
 
 export const getProductByBarcode = async (barcode: string): Promise<Product | null> => {

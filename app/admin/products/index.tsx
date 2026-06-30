@@ -2,6 +2,7 @@ import { Modal, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { Product, getProducts, addProduct, deleteProduct, updateProduct } from '@/db/queries';
+import { getDeviceConfig, pushProductToTurso } from '@/db/sync';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView } from 'expo-camera';
 import { useFocusEffect } from 'expo-router';
@@ -62,6 +63,11 @@ export default function ProductsAdmin() {
 
     useFocusEffect(useCallback(() => { loadProducts(); }, []));
 
+    // Sube el producto a Turso al instante (fire-and-forget, cola offline si no hay red)
+    const syncProduct = (id: number) => {
+        getDeviceConfig().then(cfg => { if (cfg) pushProductToTurso(cfg.deviceId, id).catch(() => {}); });
+    };
+
     const hasCost = parseFloat(newProduct.cost_price) > 0;
     const computedPrice = hasCost
         ? calcSellPrice(parseFloat(newProduct.cost_price), newProduct.margin_percentage)
@@ -79,8 +85,9 @@ export default function ProductsAdmin() {
         const finalCost = parseFloat(newProduct.cost_price) || 0;
 
         try {
+            let savedId: number;
             if (editingId) {
-                await updateProduct(
+                savedId = await updateProduct(
                     editingId,
                     newProduct.name,
                     finalPrice,
@@ -90,7 +97,7 @@ export default function ProductsAdmin() {
                     newProduct.margin_percentage,
                 );
             } else {
-                await addProduct(
+                savedId = await addProduct(
                     newProduct.name,
                     finalPrice,
                     newProduct.barcode,
@@ -102,6 +109,7 @@ export default function ProductsAdmin() {
             setModalVisible(false);
             setNewProduct(emptyForm);
             setEditingId(null);
+            syncProduct(savedId);
             loadProducts();
         } catch (error) {
             showError(error instanceof Error ? error.message : 'Error al guardar producto');
@@ -127,6 +135,7 @@ export default function ProductsAdmin() {
 
     const handleDelete = async (id: number) => {
         await deleteProduct(id);
+        syncProduct(id);
         loadProducts();
     };
 
