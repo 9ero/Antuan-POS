@@ -1,4 +1,4 @@
-import { Modal, StyleSheet } from 'react-native';
+import { Modal, StyleSheet, LayoutAnimation } from 'react-native';
 import { Link } from 'expo-router';
 import { useState, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,6 +54,13 @@ export default function POSScreen() {
     // Navegación por categorías. Por defecto sin filtro: muestra todos los productos.
     const [activeFilter, setActiveFilter] = useState<Filter>(ALL);
     const [showCategoryPanel, setShowCategoryPanel] = useState(false);
+
+    // Carrito expandible: tap en "Carrito" lo escala a media pantalla y vuelve
+    const [cartExpanded, setCartExpanded] = useState(false);
+    const toggleCart = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setCartExpanded(v => !v);
+    };
 
     const isArtesanal = (p: Product) => !p.barcode || p.barcode.trim() === '';
 
@@ -217,9 +224,9 @@ export default function POSScreen() {
             <Box flex={1} flexDirection="column">
 
                 {/* TOP: Products */}
-                <Box flex={2} p="$4">
+                <Box flex={cartExpanded ? 1 : 2} p="$4">
                     <HStack justifyContent="space-between" mb="$4" alignItems="center">
-                        <Heading size="xl" color="$purple600">Antuan POS</Heading>
+                        <Heading size="xl" color="$blue600">Antuan POS</Heading>
                         <HStack space="md">
                             <Link href="/history" asChild>
                                 <Button variant="outline" size="sm">
@@ -233,12 +240,6 @@ export default function POSScreen() {
                             </Link>
                         </HStack>
                     </HStack>
-
-                    <Button onPress={startScanning} mb="$4" bg="$purple600">
-                        {/* @ts-ignore */}
-                        <ButtonIcon as={Ionicons} name="qr-code-outline" mr="$2" />
-                        <ButtonText>Escanear Producto</ButtonText>
-                    </Button>
 
                     {/* Navegación por categorías (sin filtro por defecto = Todos) */}
                     <VStack space="xs" mb="$3">
@@ -312,7 +313,7 @@ export default function POSScreen() {
                                             <VStack alignItems="center" space="xs">
                                                 <Box
                                                     w="$10" h="$10"
-                                                    bg={outOfStock ? '$coolGray200' : lowStock ? '$orange100' : '$coolGray100'}
+                                                    bg={outOfStock ? '$coolGray200' : lowStock ? '$amber100' : '$coolGray100'}
                                                     borderRadius="$full"
                                                     alignItems="center"
                                                     justifyContent="center"
@@ -321,14 +322,14 @@ export default function POSScreen() {
                                                 </Box>
                                                 <Text fontWeight="bold" textAlign="center">{product.name}</Text>
                                                 <Text
-                                                    color={outOfStock ? '$coolGray400' : '$green600'}
+                                                    color={outOfStock ? '$coolGray400' : '$emerald600'}
                                                     fontWeight="bold"
                                                 >
                                                     ₡{product.price}
                                                 </Text>
                                                 <Text
                                                     size="xs"
-                                                    color={outOfStock ? '$red500' : lowStock ? '$orange500' : '$coolGray500'}
+                                                    color={outOfStock ? '$red500' : lowStock ? '$amber500' : '$coolGray500'}
                                                     fontWeight={lowStock ? '$semibold' : '$normal'}
                                                 >
                                                     {outOfStock ? 'Sin Stock' : `Stock: ${product.stock}`}
@@ -349,9 +350,34 @@ export default function POSScreen() {
                     shadowColor="$black" shadowOffset={{ width: 0, height: -2 }}
                     shadowOpacity={0.1} shadowRadius={4} elevation={10}
                 >
-                    <Heading size="md" mb="$2">
-                        Carrito ({cart.reduce((a, b) => a + b.quantity, 0)})
-                    </Heading>
+                    {/* Botón Escanear flotante, centrado justo sobre el borde del carrito */}
+                    <Box
+                        position="absolute" top={0} left={0} right={0}
+                        alignItems="center" zIndex={20}
+                        pointerEvents="box-none"
+                        style={{ transform: [{ translateY: -42 }] }}
+                    >
+                        <Button
+                            onPress={startScanning}
+                            bg="$blue600" px="$8" borderRadius="$lg"
+                            shadowColor="$black" shadowOffset={{ width: 0, height: 2 }}
+                            shadowOpacity={0.25} shadowRadius={5} elevation={6}
+                        >
+                            {/* @ts-ignore */}
+                            <ButtonIcon as={Ionicons} name="qr-code-outline" mr="$2" />
+                            <ButtonText>Escanear</ButtonText>
+                        </Button>
+                    </Box>
+
+                    <Pressable onPress={toggleCart}>
+                        <HStack justifyContent="space-between" alignItems="center" mb="$2">
+                            <Heading size="md">
+                                Carrito ({cart.reduce((a, b) => a + b.quantity, 0)})
+                            </Heading>
+                            {/* @ts-ignore */}
+                            <Icon as={Ionicons} name={cartExpanded ? 'chevron-down' : 'chevron-up'} color="$coolGray400" />
+                        </HStack>
+                    </Pressable>
 
                     <ScrollView flex={1}>
                         <VStack space="sm">
@@ -379,13 +405,13 @@ export default function POSScreen() {
 
                     <HStack justifyContent="space-between" mb="$2" alignItems="center">
                         <Text size="lg" color="$coolGray500">Total</Text>
-                        <Heading size="2xl">₡{cartTotal}</Heading>
+                        <Heading size="2xl" color="$emerald600">₡{cartTotal}</Heading>
                     </HStack>
 
                     <Button
                         size="xl"
                         isDisabled={cart.length === 0}
-                        bg={cart.length === 0 ? '$coolGray300' : '$green600'}
+                        bg={cart.length === 0 ? '$coolGray300' : '$emerald600'}
                         onPress={openCheckoutModal}
                     >
                         <ButtonText>Cobrar</ButtonText>
@@ -399,7 +425,7 @@ export default function POSScreen() {
                     <Box bg="$white" borderTopLeftRadius="$3xl" borderTopRightRadius="$3xl" p="$6" maxHeight="85%">
                         <Heading size="lg" mb="$1">Confirmar Compra</Heading>
                         <Text color="$coolGray500" mb="$4">
-                            Total: <Text fontWeight="$bold" color="$green700" size="lg">₡{cartTotal}</Text>
+                            Total: <Text fontWeight="$bold" color="$emerald700" size="lg">₡{cartTotal}</Text>
                         </Text>
 
                         {/* User selector */}
@@ -462,7 +488,7 @@ export default function POSScreen() {
 
                         <Button
                             size="lg"
-                            bg="$green600"
+                            bg="$emerald600"
                             isDisabled={!modalUser || checkoutPin.length !== 4 || isSubmitting}
                             onPress={handleConfirm}
                             mb="$2"
@@ -547,10 +573,20 @@ export default function POSScreen() {
                         facing="back"
                         onBarcodeScanned={handleBarCodeScanned}
                     />
-                    <Box position="absolute" bottom={40} left={0} right={0} alignItems="center">
-                        <Button onPress={stopScanning} variant="solid" bg="$white">
-                            <ButtonText color="$black">Cerrar Escáner</ButtonText>
-                        </Button>
+                    <Box position="absolute" bottom={48} left={0} right={0} alignItems="center">
+                        <Pressable
+                            onPress={stopScanning}
+                            borderWidth={1}
+                            borderColor="$white"
+                            borderRadius="$md"
+                            px="$5" py="$3"
+                            flexDirection="row"
+                            alignItems="center"
+                        >
+                            {/* @ts-ignore */}
+                            <Ionicons name="close" size={18} color="white" style={{ marginRight: 6 }} />
+                            <Text color="$white" fontWeight="$semibold">Cerrar</Text>
+                        </Pressable>
                     </Box>
 
                     {scannedProduct && (
@@ -558,13 +594,13 @@ export default function POSScreen() {
                             <Card p="$5" w="90%" variant="elevated">
                                 <VStack space="md" alignItems="center">
                                     <Heading size="lg" textAlign="center">{scannedProduct.name}</Heading>
-                                    <Text size="xl" color="$green600" fontWeight="bold">₡{scannedProduct.price}</Text>
+                                    <Text size="xl" color="$emerald600" fontWeight="bold">₡{scannedProduct.price}</Text>
                                     <Text color="$coolGray500">Stock: {scannedProduct.stock}</Text>
                                     <HStack space="md" mt="$4" w="100%" justifyContent="center">
                                         <Button onPress={() => setScannedProduct(null)} variant="outline" action="secondary" flex={1}>
                                             <ButtonText>Cancelar</ButtonText>
                                         </Button>
-                                        <Button onPress={confirmScannedProduct} bg="$green600" flex={1}>
+                                        <Button onPress={confirmScannedProduct} bg="$emerald600" flex={1}>
                                             <ButtonText>Agregar</ButtonText>
                                         </Button>
                                     </HStack>

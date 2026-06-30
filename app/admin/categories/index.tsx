@@ -113,7 +113,7 @@ export default function CategoriesAdmin() {
                                         <Text fontWeight="$bold" color={active ? '$coolGray800' : '$coolGray400'}>
                                             {cat.name}
                                         </Text>
-                                        <Text size="xs" color={active ? '$green600' : '$coolGray400'}>
+                                        <Text size="xs" color={active ? '$emerald600' : '$coolGray400'}>
                                             {active ? 'Activa' : 'Desactivada'}
                                         </Text>
                                     </VStack>

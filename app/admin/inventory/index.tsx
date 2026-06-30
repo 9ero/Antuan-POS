@@ -140,12 +140,12 @@ export default function InventoryAdmin() {
                                     <HStack space="sm" alignItems="center" flex={1}>
                                         {isLow && (
                                             <Box
-                                                bg={product.stock === 0 ? '$red100' : '$orange100'}
+                                                bg={product.stock === 0 ? '$red100' : '$amber100'}
                                                 px="$2" py="$0.5" borderRadius="$full"
                                             >
                                                 <Text
                                                     size="xs" fontWeight="$bold"
-                                                    color={product.stock === 0 ? '$red600' : '$orange600'}
+                                                    color={product.stock === 0 ? '$red600' : '$amber600'}
                                                 >
                                                     {product.stock === 0 ? 'Agotado' : '⚠ Bajo'}
                                                 </Text>
@@ -154,12 +154,12 @@ export default function InventoryAdmin() {
                                         <Heading size="sm" flex={1}>{product.name}</Heading>
                                     </HStack>
                                     <Box
-                                        bg={product.stock === 0 ? '$red50' : isLow ? '$orange50' : '$green50'}
+                                        bg={product.stock === 0 ? '$red50' : isLow ? '$amber50' : '$emerald50'}
                                         px="$3" py="$1" borderRadius="$md"
                                     >
                                         <Text
                                             fontWeight="$bold" size="lg"
-                                            color={product.stock === 0 ? '$red600' : isLow ? '$orange600' : '$green700'}
+                                            color={product.stock === 0 ? '$red600' : isLow ? '$amber600' : '$emerald700'}
                                         >
                                             {product.stock}
                                         </Text>
@@ -209,7 +209,7 @@ export default function InventoryAdmin() {
                                                         <HStack space="sm" alignItems="center">
                                                             <Text
                                                                 fontWeight="$bold" size="sm"
-                                                                color={m.quantity_change > 0 ? '$green600' : '$red500'}
+                                                                color={m.quantity_change > 0 ? '$emerald600' : '$red500'}
                                                             >
                                                                 {m.quantity_change > 0 ? '+' : ''}{m.quantity_change}
                                                             </Text>

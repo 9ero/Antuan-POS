@@ -180,12 +180,27 @@ Admin → "⚙ Reset (dev)" ofrece:
 - ✅ Feature 7: Turso backup/restore — push en tiempo real por evento, restore completo, cola offline
 - ✅ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
 - ⬜ Feature 10: Ícono de app — asset para EAS Build (Android adaptive icon)
-- ⬜ Feature 8: Calibración visual — azul de Gluestack como color primario consistente en toda la app
+- ✅ Feature 8: Calibración visual — azul primario + acentos emerald/amber consistentes
 - ⬜ Fase de pruebas exhaustivas — flujos completos en dispositivo real antes de build de producción
 
 ## Próximos pasos (orden de ejecución por dificultad, visual al final)
 
-Orden acordado: **1) Limpieza ✅ → 2) Feature 9 (categorías) ✅ → 3) Pruebas exhaustivas → 4) Feature 10 (ícono) → 5) Feature 8 (azul)**. Lo funcional primero, lo visual (bajo riesgo) al final sobre una base ya probada.
+Orden acordado: **1) Limpieza ✅ → 2) Feature 9 (categorías) ✅ → Feature 8 (color) ✅ → Feature 10 (ícono, en progreso) → Pruebas exhaustivas (al final)**. Lo funcional y lo visual primero; las pruebas exhaustivas como gate final antes del build.
+
+## Sistema de color (Feature 8)
+Paleta aplicada de forma consistente (regla 60% neutro / 30% azul / 10% acento). Roles semánticos:
+- **Azul `$blue600`** (`$blue50/400/700`): identidad + acción primaria/navegación (header POS, botón escáner, chips activos, links, primarios admin) **y** métrica "Ventas/ingresos" en reportes (cierre/historial, montos de transacción).
+- **Emerald `$emerald600`** (`$emerald50/100/700`): dinero/éxito/cobrar (precios ₡, Cobrar, Confirmar, total carrito, precio escaneado, stock OK, "sync ok") **y** métrica "Ganancia".
+- **Amber `$amber500`** (`$amber100/600/700`): advertencia / stock bajo / ranking consumo (🔥).
+- **Red `$red600/500`**: error / sin stock / eliminar / salir.
+- **coolGray**: neutros (texto, bordes, fondos).
+
+Tokens `$emerald`/`$amber` existen en `@gluestack-ui/config`. Ya no se usa `$purple`/`$green`/`$orange` en `app/`.
+
+### Interacciones del POS (`app/index.tsx`)
+- **Botón "Escanear"** (antes "Escanear Producto"): elemento **flotante** (absolute, `pointerEvents="box-none"`), centrado y anclado al tope del panel del carrito con sombra — no ocupa fila en el layout y sigue al carrito aunque se expanda. `translateY: -24` ajusta la altura del flote.
+- **Carrito expandible**: tap en el título "Carrito" escala el panel a media pantalla (top `flex 2→1`) y vuelve, con `LayoutAnimation`. Chevron ▲/▼ indica el estado.
+- **"Cerrar Escáner"** (modal de cámara): botón outline transparente con borde blanco + ícono ✕, cuadrado (`borderRadius="$md"`), para no tapar la cámara.
 
 ### 1. Limpieza técnica ✅
 - Borrado `app/admin/pins/` (legacy roto). PIN admin centralizado en `utils/constants.ts` → `ADMIN_PIN` (lee `EXPO_PUBLIC_ADMIN_PIN`). Columna `is_used` deprecada.
@@ -212,10 +227,11 @@ Flujos a cubrir antes de build de producción:
 9. Excel historial: 3 hojas con columnas ajustadas y datos correctos
 10. Admin: productos, usuarios, PINs, inventario — CRUD completo sin errores
 
-### 4. Feature 10 — Ícono de app (baja, visual)
-- Asset en `assets/` (1024×1024 PNG, fondo azul con inicial o logo)
-- Configurar `icon`, `android.adaptiveIcon.foregroundImage` y `android.adaptiveIcon.backgroundColor` en `app.json`
-- Requiere rebuild del APK con EAS Build
+### Feature 8 — Calibración visual ✅
+Hecha. Ver sección **"Sistema de color"** arriba para los roles semánticos. No queda `$purple`/`$green`/`$orange` en `app/`.
 
-### 5. Feature 8 — Calibración visual (baja, visual)
-El azul de Gluestack (`$blue600` / `$blue500`) ya se usa en algunos lugares. Hay que auditarlo y aplicarlo de forma consistente como color primario en botones de acción principal, chips activos, badges, indicadores de estado y links. El resto de la UI usa grises neutros de NativeWind — no tocar esos.
+### Feature 10 — Ícono de app (en progreso, fuera de commits de features)
+- Assets `assets/Antuan.png` / `AntuanColor.png` + `app.json` (nombre "Antuan POS", icon/splash/adaptiveIcon) + `Image` en pantalla de carga (`app/_layout.tsx`). Trabajo del usuario, sin commitear junto a las features.
+- **Pendiente:** verificar zona segura del adaptive icon (logo al ~66% central con margen, o Android lo recorta); fondo del adaptive icon `#2563EB`. El ícono solo se ve en build real (EAS), no en dev.
+
+La **fase de pruebas exhaustivas** (sección 3 arriba, 10 flujos) queda como gate final antes del build de producción.

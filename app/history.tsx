@@ -319,7 +319,7 @@ export default function HistoryScreen() {
                         <Button onPress={() => { setPin(''); setShowClearModal(true); }} size="sm" variant="outline" action="negative" borderColor="$red500">
                             <ButtonIcon as={TrashIcon} color="$red500" />
                         </Button>
-                        <Button onPress={handleExport} size="sm" bg="$green600">
+                        <Button onPress={handleExport} size="sm" bg="$blue600">
                             <ButtonIcon as={DownloadIcon} mr="$1" />
                             <ButtonText>Excel</ButtonText>
                         </Button>
@@ -406,16 +406,16 @@ export default function HistoryScreen() {
                                     <Text fontWeight="$bold" size="sm">{stats.topProduct?.[0] ?? '—'}</Text>
                                     <Text size="xs" color="$blue600">{stats.topProduct?.[1].units ?? 0} uds</Text>
                                 </VStack>
-                                <VStack flex={1} bg="$green50" p="$3" borderRadius="$md">
+                                <VStack flex={1} bg="$blue50" p="$3" borderRadius="$md">
                                     <Text size="xs" color="$coolGray500" mb="$1">Cliente top</Text>
                                     <Text fontWeight="$bold" size="sm">{stats.topUser?.[0] ?? '—'}</Text>
-                                    <Text size="xs" color="$green600">{fmtCRC(stats.topUser?.[1] ?? 0)}</Text>
+                                    <Text size="xs" color="$blue600">{fmtCRC(stats.topUser?.[1] ?? 0)}</Text>
                                 </VStack>
                             </HStack>
 
-                            <Box bg="$purple50" p="$3" borderRadius="$md" mb="$3">
+                            <Box bg="$emerald50" p="$3" borderRadius="$md" mb="$3">
                                 <Text size="xs" color="$coolGray500" mb="$1">Ganancia estimada del período</Text>
-                                <Text fontWeight="$bold" color="$purple700">{fmtCRC(stats.estimatedProfit)}</Text>
+                                <Text fontWeight="$bold" color="$emerald700">{fmtCRC(stats.estimatedProfit)}</Text>
                                 <Text size="xs" color="$coolGray400">Basada en costos actuales de productos</Text>
                             </Box>
 
@@ -430,7 +430,7 @@ export default function HistoryScreen() {
                                                 py="$1.5" borderBottomWidth={i < stats.burnRates.length - 1 ? 1 : 0}
                                                 borderColor="$coolGray100">
                                                 <HStack alignItems="center" space="xs" flex={1}>
-                                                    <Text size="xs" color="$orange500" fontWeight="$bold">#{i + 1}</Text>
+                                                    <Text size="xs" color="$amber500" fontWeight="$bold">#{i + 1}</Text>
                                                     <Text size="sm" flex={1} numberOfLines={1}>{p.name}</Text>
                                                 </HStack>
                                                 <VStack alignItems="flex-end">
@@ -438,7 +438,7 @@ export default function HistoryScreen() {
                                                     <Text size="xs" color={
                                                         p.daysLeft === null ? '$coolGray400' :
                                                         p.daysLeft <= 3 ? '$red500' :
-                                                        p.daysLeft <= 7 ? '$orange500' : '$green600'
+                                                        p.daysLeft <= 7 ? '$amber500' : '$emerald600'
                                                     }>
                                                         {p.daysLeft === null ? 'sin consumo'
                                                             : p.stock === 0 ? 'agotado'
@@ -458,7 +458,7 @@ export default function HistoryScreen() {
                         <Card key={item.id} variant="elevated" p="$4">
                             <HStack justifyContent="space-between" mb="$2">
                                 <Heading size="sm">{item.user_name || 'Cliente desconocido'}</Heading>
-                                <Text color="$green600" fontWeight="bold">{fmtCRC(item.total)}</Text>
+                                <Text color="$blue600" fontWeight="bold">{fmtCRC(item.total)}</Text>
                             </HStack>
                             <Box borderTopWidth={1} borderColor="$coolGray100" py="$2" my="$1">
                                 {item.items.map((prod, index) => (

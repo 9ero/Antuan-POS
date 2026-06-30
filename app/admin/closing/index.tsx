@@ -59,8 +59,8 @@ const fmtDate = (d: string) => new Date(d.includes('T') ? d : d.replace(' ', 'T'
 function daysColor(days: number | null): string {
     if (days === null) return '$coolGray400';
     if (days <= 7) return '$red500';
-    if (days <= 14) return '$orange500';
-    return '$green600';
+    if (days <= 14) return '$amber500';
+    return '$emerald600';
 }
 
 interface BurnEntry extends ClosingProductSummary {
@@ -147,7 +147,7 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
 
             {burnRanking.length > 0 && (
                 <VStack space="xs" mb="$4">
-                    <Text size="xs" fontWeight="$semibold" color="$orange600" mb="$1">
+                    <Text size="xs" fontWeight="$semibold" color="$amber600" mb="$1">
                         CONSUMO MÁS RÁPIDO
                     </Text>
                     <RNScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator>
@@ -155,10 +155,10 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
                             <HStack key={p.productId} justifyContent="space-between" alignItems="center" py="$1">
                                 <HStack space="sm" alignItems="center" flex={1}>
                                     <Box
-                                        w={24} h={24} borderRadius="$full" bg="$orange100"
+                                        w={24} h={24} borderRadius="$full" bg="$amber100"
                                         alignItems="center" justifyContent="center"
                                     >
-                                        <Text size="xs" fontWeight="$bold" color="$orange700">{i + 1}</Text>
+                                        <Text size="xs" fontWeight="$bold" color="$amber700">{i + 1}</Text>
                                     </Box>
                                     <VStack flex={1}>
                                         <Text size="sm" fontWeight="$semibold">{p.name}</Text>
@@ -169,7 +169,7 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
                                     </VStack>
                                 </HStack>
                                 <VStack alignItems="flex-end">
-                                    <Text size="sm" fontWeight="$bold" color="$orange600">
+                                    <Text size="sm" fontWeight="$bold" color="$amber600">
                                         {p.dailyBurn.toFixed(1)} uds/día
                                     </Text>
                                     {p.currentStock === 0 && (
@@ -184,7 +184,7 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
 
             {profitRanking.length > 0 && (
                 <VStack space="xs">
-                    <Text size="xs" fontWeight="$semibold" color="$purple600" mb="$1">
+                    <Text size="xs" fontWeight="$semibold" color="$emerald600" mb="$1">
                         MAYOR GANANCIA GENERADA
                     </Text>
                     <RNScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator>
@@ -192,10 +192,10 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
                             <HStack key={p.productId} justifyContent="space-between" alignItems="center" py="$1">
                                 <HStack space="sm" alignItems="center" flex={1}>
                                     <Box
-                                        w={24} h={24} borderRadius="$full" bg="$purple100"
+                                        w={24} h={24} borderRadius="$full" bg="$emerald100"
                                         alignItems="center" justifyContent="center"
                                     >
-                                        <Text size="xs" fontWeight="$bold" color="$purple700">{i + 1}</Text>
+                                        <Text size="xs" fontWeight="$bold" color="$emerald700">{i + 1}</Text>
                                     </Box>
                                     <VStack flex={1}>
                                         <Text size="sm" fontWeight="$semibold">{p.name}</Text>
@@ -203,10 +203,10 @@ function StatsSection({ summary }: { summary: ClosingSummary }) {
                                     </VStack>
                                 </HStack>
                                 <VStack alignItems="flex-end">
-                                    <Text size="sm" fontWeight="$bold" color="$purple600">
+                                    <Text size="sm" fontWeight="$bold" color="$emerald600">
                                         {fmt(p.profit)}
                                     </Text>
-                                    <Text size="xs" color="$purple400">ganancia</Text>
+                                    <Text size="xs" color="$emerald600">ganancia</Text>
                                 </VStack>
                             </HStack>
                         ))}
@@ -414,13 +414,13 @@ export default function CashClosingScreen() {
                                     <Text size="xs" color="$blue400">Transacciones</Text>
                                     <Text fontWeight="$bold" size="xl" color="$blue700">{summary.transactionCount}</Text>
                                 </Box>
-                                <Box bg="$green50" px="$3" py="$2" borderRadius="$lg" flex={1}>
-                                    <Text size="xs" color="$green400">Ventas</Text>
-                                    <Text fontWeight="$bold" size="lg" color="$green700">{fmt(summary.totalRevenue)}</Text>
+                                <Box bg="$blue50" px="$3" py="$2" borderRadius="$lg" flex={1}>
+                                    <Text size="xs" color="$blue400">Ventas</Text>
+                                    <Text fontWeight="$bold" size="lg" color="$blue700">{fmt(summary.totalRevenue)}</Text>
                                 </Box>
-                                <Box bg="$purple50" px="$3" py="$2" borderRadius="$lg" flex={1}>
-                                    <Text size="xs" color="$purple400">Ganancia</Text>
-                                    <Text fontWeight="$bold" size="lg" color="$purple700">{fmt(summary.totalProfit)}</Text>
+                                <Box bg="$emerald50" px="$3" py="$2" borderRadius="$lg" flex={1}>
+                                    <Text size="xs" color="$emerald600">Ganancia</Text>
+                                    <Text fontWeight="$bold" size="lg" color="$emerald700">{fmt(summary.totalProfit)}</Text>
                                 </Box>
                             </HStack>
                         ) : null}
@@ -430,7 +430,7 @@ export default function CashClosingScreen() {
                             <HStack space="xs" alignItems="center" mt="$2">
                                 <Text size="xs" color={
                                     syncStatus === 'syncing' ? '$coolGray400' :
-                                    syncStatus === 'ok' ? '$green600' : '$red500'
+                                    syncStatus === 'ok' ? '$emerald600' : '$red500'
                                 }>
                                     {syncStatus === 'syncing' ? '↑ Sincronizando con la nube...' :
                                      syncStatus === 'ok' ? '✓ Respaldo en la nube actualizado' :
@@ -469,7 +469,7 @@ export default function CashClosingScreen() {
                                                             </Text>
                                                         </VStack>
                                                         <HStack space="sm" alignItems="center">
-                                                            <Text fontWeight="$bold" color="$green700">{fmt(u.total)}</Text>
+                                                            <Text fontWeight="$bold" color="$blue700">{fmt(u.total)}</Text>
                                                             <Text size="sm" color="$coolGray400">{isOpen ? '▲' : '▼'}</Text>
                                                         </HStack>
                                                     </HStack>
@@ -516,13 +516,13 @@ export default function CashClosingScreen() {
                                                     <HStack space="xs" alignItems="center" flexWrap="wrap" mb="$0.5">
                                                         <Text fontWeight="$semibold" size="sm">{p.name}</Text>
                                                         {burnPos !== undefined && (
-                                                            <Box bg="$orange100" px="$1.5" py="$0.5" borderRadius="$sm">
-                                                                <Text size="xs" color="$orange600" fontWeight="$bold">🔥#{burnPos}</Text>
+                                                            <Box bg="$amber100" px="$1.5" py="$0.5" borderRadius="$sm">
+                                                                <Text size="xs" color="$amber600" fontWeight="$bold">🔥#{burnPos}</Text>
                                                             </Box>
                                                         )}
                                                         {profitPos !== undefined && (
-                                                            <Box bg="$purple100" px="$1.5" py="$0.5" borderRadius="$sm">
-                                                                <Text size="xs" color="$purple600" fontWeight="$bold">💰#{profitPos}</Text>
+                                                            <Box bg="$emerald100" px="$1.5" py="$0.5" borderRadius="$sm">
+                                                                <Text size="xs" color="$emerald600" fontWeight="$bold">💰#{profitPos}</Text>
                                                             </Box>
                                                         )}
                                                     </HStack>
@@ -543,9 +543,9 @@ export default function CashClosingScreen() {
                                                     </HStack>
                                                 </VStack>
                                                 <VStack alignItems="flex-end">
-                                                    <Text size="sm" color="$green700" fontWeight="$semibold">{fmt(p.revenue)}</Text>
+                                                    <Text size="sm" color="$blue700" fontWeight="$semibold">{fmt(p.revenue)}</Text>
                                                     {p.cost > 0 && (
-                                                        <Text size="xs" color="$purple500">+{fmt(p.profit)} gan.</Text>
+                                                        <Text size="xs" color="$emerald600">+{fmt(p.profit)} gan.</Text>
                                                     )}
                                                 </VStack>
                                             </HStack>
@@ -609,7 +609,7 @@ export default function CashClosingScreen() {
                                                         </Text>
                                                     </VStack>
                                                     <HStack space="sm" alignItems="center">
-                                                        <Text fontWeight="$bold" color="$green700">{fmt(closing.total_sales)}</Text>
+                                                        <Text fontWeight="$bold" color="$blue700">{fmt(closing.total_sales)}</Text>
                                                         <Text size="sm" color="$coolGray400">{isOpen ? '▲' : '▼'}</Text>
                                                     </HStack>
                                                 </HStack>
@@ -619,7 +619,7 @@ export default function CashClosingScreen() {
                                                 <Box mt="$3" pt="$3" borderTopWidth={1} borderColor="$coolGray100">
                                                     <Text size="xs" color="$coolGray500" mb="$3">
                                                         {hs.transactionCount} transacciones ·{' '}
-                                                        Ganancia: <Text fontWeight="$semibold" color="$purple600">{fmt(hs.totalProfit)}</Text>
+                                                        Ganancia: <Text fontWeight="$semibold" color="$emerald600">{fmt(hs.totalProfit)}</Text>
                                                     </Text>
 
                                                     <Text size="xs" fontWeight="$semibold" color="$coolGray500" mb="$1">CLIENTES</Text>
@@ -627,7 +627,7 @@ export default function CashClosingScreen() {
                                                         {hs.byUser.map(u => (
                                                             <HStack key={u.userId} justifyContent="space-between" py="$0.5">
                                                                 <Text size="sm">{u.userName} ({u.transactionCount})</Text>
-                                                                <Text size="sm" color="$green700">{fmt(u.total)}</Text>
+                                                                <Text size="sm" color="$blue700">{fmt(u.total)}</Text>
                                                             </HStack>
                                                         ))}
                                                     </RNScrollView>
@@ -643,7 +643,7 @@ export default function CashClosingScreen() {
                                                                         {p.unitsLost > 0 && <Text size="xs" color="$red500">×{p.unitsLost} falt.</Text>}
                                                                     </HStack>
                                                                 </VStack>
-                                                                <Text size="sm" color="$green700">{fmt(p.revenue)}</Text>
+                                                                <Text size="sm" color="$blue700">{fmt(p.revenue)}</Text>
                                                             </HStack>
                                                         ))}
                                                     </RNScrollView>
@@ -695,9 +695,9 @@ export default function CashClosingScreen() {
                         </Text>
                         {summary && (
                             <HStack space="md" mt="$4">
-                                <Box bg="$green50" px="$3" py="$2" borderRadius="$lg" flex={1}>
-                                    <Text size="xs" color="$green400">Total ventas</Text>
-                                    <Text fontWeight="$bold" color="$green700">{fmt(summary.totalRevenue)}</Text>
+                                <Box bg="$blue50" px="$3" py="$2" borderRadius="$lg" flex={1}>
+                                    <Text size="xs" color="$blue400">Total ventas</Text>
+                                    <Text fontWeight="$bold" color="$blue700">{fmt(summary.totalRevenue)}</Text>
                                 </Box>
                                 <Box bg="$blue50" px="$3" py="$2" borderRadius="$lg" flex={1}>
                                     <Text size="xs" color="$blue400">Transacciones</Text>
