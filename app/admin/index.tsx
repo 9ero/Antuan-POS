@@ -64,6 +64,17 @@ export default function AdminDashboard() {
 
                 <TouchableOpacity
                     className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex-row items-center justify-between"
+                    onPress={() => router.push('/admin/categories')}
+                >
+                    <View>
+                        <Text className="text-xl font-bold text-gray-800">Categorías</Text>
+                        <Text className="text-gray-500">Crear, renombrar, activar o desactivar</Text>
+                    </View>
+                    <Text className="text-2xl text-gray-400">→</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex-row items-center justify-between"
                     onPress={() => router.push('/admin/users')}
                 >
                     <View>
@@ -150,6 +161,7 @@ export default function AdminDashboard() {
                                             DELETE FROM checkout_pins;
                                             DELETE FROM users;
                                             DELETE FROM products;
+                                            DELETE FROM categories;
                                             DELETE FROM settings;
                                         `);
                                         Alert.alert('Listo', 'Base de datos local vaciada. Reiniciá la app.');

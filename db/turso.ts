@@ -96,6 +96,16 @@ export const initTursoSchema = async (): Promise<void> => {
             )`,
         },
         {
+            sql: `CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER,
+                device_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT,
+                PRIMARY KEY (id, device_id)
+            )`,
+        },
+        {
             sql: `CREATE TABLE IF NOT EXISTS products (
                 id INTEGER,
                 device_id INTEGER NOT NULL,
@@ -104,6 +114,7 @@ export const initTursoSchema = async (): Promise<void> => {
                 cost_price REAL DEFAULT 0,
                 margin_percentage INTEGER DEFAULT 30,
                 barcode TEXT,
+                category_id INTEGER,
                 stock INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
                 created_at TEXT,
@@ -159,5 +170,8 @@ export const initTursoSchema = async (): Promise<void> => {
     // no agrega columnas). Best-effort: si la columna ya existe, Turso lanza error y se ignora.
     try {
         await tursoExecute([{ sql: 'ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1' }]);
+    } catch { /* la columna ya existe */ }
+    try {
+        await tursoExecute([{ sql: 'ALTER TABLE products ADD COLUMN category_id INTEGER' }]);
     } catch { /* la columna ya existe */ }
 };

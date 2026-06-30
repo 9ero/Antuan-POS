@@ -1,7 +1,7 @@
 import { Modal, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
-import { useState, useCallback } from 'react';
-import { Product, getProducts, addProduct, deleteProduct, updateProduct } from '@/db/queries';
+import { useState, useCallback, useMemo } from 'react';
+import { Product, Category, getProducts, getAllCategories, addProduct, deleteProduct, updateProduct } from '@/db/queries';
 import { getDeviceConfig, pushProductToTurso } from '@/db/sync';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView } from 'expo-camera';
@@ -38,10 +38,15 @@ type Margin = typeof MARGINS[number];
 const calcSellPrice = (cost: number, margin: number) =>
     Math.round(cost * (1 + margin / 100) / 5) * 5;
 
-const emptyForm = { name: '', cost_price: '', margin_percentage: 30 as Margin, price: '', barcode: '', stock: '' };
+const emptyForm = { name: '', cost_price: '', margin_percentage: 30 as Margin, price: '', barcode: '', stock: '', category_id: null as number | null };
+
+const normalize = (s: string) =>
+    s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export default function ProductsAdmin() {
     const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [search, setSearch] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [newProduct, setNewProduct] = useState(emptyForm);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -57,9 +62,24 @@ export default function ProductsAdmin() {
     };
 
     const loadProducts = async () => {
-        const data = await getProducts();
+        const [data, cats] = await Promise.all([getProducts(), getAllCategories()]);
         setProducts(data);
+        setCategories(cats);
     };
+
+    // Solo activas para el selector; el nombre se resuelve sobre todas (incl. inactivas)
+    const activeCategories = categories.filter(c => c.is_active !== 0);
+    const categoryName = (id: number | null | undefined) =>
+        id == null ? null : (categories.find(c => c.id === id)?.name ?? null);
+
+    // Búsqueda rápida por nombre (accent-insensitive) o código de barras
+    const filteredProducts = useMemo(() => {
+        const q = normalize(search.trim());
+        if (!q) return products;
+        return products.filter(p =>
+            normalize(p.name).includes(q) || (p.barcode || '').toLowerCase().includes(q)
+        );
+    }, [products, search]);
 
     useFocusEffect(useCallback(() => { loadProducts(); }, []));
 
@@ -76,6 +96,7 @@ export default function ProductsAdmin() {
     const handleAdd = async () => {
         if (!newProduct.name) { showError('El nombre es requerido'); return; }
         if (!hasCost && !newProduct.price) { showError('Ingresa el precio de costo o el precio de venta'); return; }
+        if (newProduct.category_id == null) { showError('Seleccioná una categoría'); return; }
         if (isSubmitting) return;
         setIsSubmitting(true);
 
@@ -95,6 +116,7 @@ export default function ProductsAdmin() {
                     parseInt(newProduct.stock || '0'),
                     finalCost,
                     newProduct.margin_percentage,
+                    newProduct.category_id,
                 );
             } else {
                 savedId = await addProduct(
@@ -104,6 +126,7 @@ export default function ProductsAdmin() {
                     parseInt(newProduct.stock || '0'),
                     finalCost,
                     newProduct.margin_percentage,
+                    newProduct.category_id,
                 );
             }
             setModalVisible(false);
@@ -128,6 +151,7 @@ export default function ProductsAdmin() {
             price: (product.cost_price ?? 0) > 0 ? '' : product.price.toString(),
             barcode: product.barcode || '',
             stock: product.stock.toString(),
+            category_id: product.category_id ?? null,
         });
         setEditingId(product.id!);
         setModalVisible(true);
@@ -154,9 +178,27 @@ export default function ProductsAdmin() {
         <Box flex={1} bg="$coolGray50">
             <Stack.Screen options={{ title: 'Gestionar Productos', headerShown: true }} />
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <Box px="$4" pt="$3" pb="$1">
+                <Input bg="$white">
+                    <InputField
+                        placeholder="Buscar por nombre o código…"
+                        value={search}
+                        onChangeText={setSearch}
+                        autoCapitalize="none"
+                    />
+                </Input>
+            </Box>
+
+            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8 }}>
                 <VStack space="md">
-                    {products.map(item => (
+                    {filteredProducts.length === 0 && (
+                        <Box alignItems="center" py="$8">
+                            <Text color="$coolGray400">
+                                {search.trim() ? 'Sin resultados' : 'No hay productos'}
+                            </Text>
+                        </Box>
+                    )}
+                    {filteredProducts.map(item => (
                         <Card key={item.id} variant="elevated" p="$4">
                             <HStack justifyContent="space-between" alignItems="center">
                                 <VStack flex={1}>
@@ -168,7 +210,9 @@ export default function ProductsAdmin() {
                                         </Text>
                                     )}
                                     <Text size="sm" color="$coolGray500">Stock: {item.stock}</Text>
-                                    {item.barcode ? <Text size="xs" color="$coolGray400">{item.barcode}</Text> : null}
+                                    {categoryName(item.category_id)
+                                        ? <Text size="xs" color="$coolGray400">{categoryName(item.category_id)}</Text>
+                                        : null}
                                 </VStack>
                                 <HStack space="md">
                                     <Pressable onPress={() => handleEdit(item)}>
@@ -280,26 +324,52 @@ export default function ProductsAdmin() {
                                 )}
                             </FormControl>
 
-                            <HStack space="md">
-                                <FormControl flex={1}>
-                                    <FormControlLabel><FormControlLabelText>Stock</FormControlLabelText></FormControlLabel>
-                                    <Input>
-                                        <InputField keyboardType="numeric" value={newProduct.stock} onChangeText={t => setNewProduct({ ...newProduct, stock: t })} />
+                            <FormControl>
+                                <FormControlLabel><FormControlLabelText>Stock</FormControlLabelText></FormControlLabel>
+                                <Input>
+                                    <InputField keyboardType="numeric" value={newProduct.stock} onChangeText={t => setNewProduct({ ...newProduct, stock: t })} />
+                                </Input>
+                            </FormControl>
+
+                            <FormControl>
+                                <FormControlLabel><FormControlLabelText>Código de Barras</FormControlLabelText></FormControlLabel>
+                                <HStack space="sm">
+                                    <Input flex={1}>
+                                        <InputField value={newProduct.barcode} onChangeText={t => setNewProduct({ ...newProduct, barcode: t })} />
                                     </Input>
-                                </FormControl>
-                                <FormControl flex={1}>
-                                    <FormControlLabel><FormControlLabelText>Código de Barras</FormControlLabelText></FormControlLabel>
-                                    <HStack space="sm">
-                                        <Input flex={1}>
-                                            <InputField value={newProduct.barcode} onChangeText={t => setNewProduct({ ...newProduct, barcode: t })} />
-                                        </Input>
-                                        <Button onPress={startScanning} variant="outline" action="secondary">
-                                            {/* @ts-ignore */}
-                                            <ButtonIcon as={Ionicons} name="qr-code-outline" />
+                                    <Button onPress={startScanning} variant="outline" action="secondary">
+                                        {/* @ts-ignore */}
+                                        <ButtonIcon as={Ionicons} name="qr-code-outline" />
                                         </Button>
                                     </HStack>
                                 </FormControl>
-                            </HStack>
+
+                            {/* Categoría: obligatoria, elegida de las categorías activas */}
+                            <FormControl>
+                                <FormControlLabel><FormControlLabelText>Categoría</FormControlLabelText></FormControlLabel>
+                                {activeCategories.length === 0 ? (
+                                    <Text size="sm" color="$coolGray400">
+                                        No hay categorías. Creá una en Admin → Categorías antes de agregar productos.
+                                    </Text>
+                                ) : (
+                                    <HStack space="sm" flexWrap="wrap">
+                                        {activeCategories.map(cat => {
+                                            const selected = newProduct.category_id === cat.id;
+                                            return (
+                                                <Pressable
+                                                    key={cat.id}
+                                                    onPress={() => setNewProduct({ ...newProduct, category_id: cat.id! })}
+                                                    bg={selected ? '$blue600' : '$coolGray100'}
+                                                    borderRadius="$full"
+                                                    px="$3" py="$1.5" mb="$1"
+                                                >
+                                                    <Text size="sm" color={selected ? '$white' : '$coolGray700'}>{cat.name}</Text>
+                                                </Pressable>
+                                            );
+                                        })}
+                                    </HStack>
+                                )}
+                            </FormControl>
                         </VStack>
 
                         <Button onPress={handleAdd} size="lg" mb="$2" isDisabled={isSubmitting}>

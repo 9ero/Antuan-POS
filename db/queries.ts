@@ -1,11 +1,11 @@
 import { dbResult } from './database';
-import { User, Product, CartItem, Transaction, TransactionSchema } from './schemas';
+import { User, Category, Product, CartItem, Transaction, TransactionSchema } from './schemas';
 
 // SQLite CURRENT_TIMESTAMP stores UTC as 'YYYY-MM-DD HH:MM:SS' (space, no Z).
 // JS/ISO strings use 'YYYY-MM-DDTHH:MM:SS.mmmZ'. Normalize to ISO for JS arithmetic.
 const toISO = (s: string) => s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
 
-export { User, Product, CartItem, Transaction };
+export { User, Category, Product, CartItem, Transaction };
 
 // Users
 export const getUsers = async (): Promise<User[]> => {
@@ -34,17 +34,43 @@ export const getProducts = async (): Promise<Product[]> => {
     return await dbResult.getAllAsync('SELECT * FROM products WHERE is_active = 1 ORDER BY name ASC');
 };
 
+// Categories
+export const getCategories = async (): Promise<Category[]> => {
+    return await dbResult.getAllAsync('SELECT * FROM categories WHERE is_active = 1 ORDER BY name ASC');
+};
+
+// Todas las categorías (incl. inactivas) para el panel de administración
+export const getAllCategories = async (): Promise<Category[]> => {
+    return await dbResult.getAllAsync('SELECT * FROM categories ORDER BY is_active DESC, name ASC');
+};
+
+export const addCategory = async (name: string): Promise<number> => {
+    const result = await dbResult.runAsync('INSERT INTO categories (name) VALUES (?)', name.trim());
+    return result.lastInsertRowId as number;
+};
+
+export const updateCategory = async (id: number, name: string): Promise<number> => {
+    await dbResult.runAsync('UPDATE categories SET name = ? WHERE id = ?', name.trim(), id);
+    return id;
+};
+
+// Soft delete / reactivación — desactivar no afecta a los productos ya asignados
+export const setCategoryActive = async (id: number, isActive: boolean): Promise<number> => {
+    await dbResult.runAsync('UPDATE categories SET is_active = ? WHERE id = ?', isActive ? 1 : 0, id);
+    return id;
+};
+
 export const addProduct = async (
     name: string, price: number, barcode: string = '', stock: number = 0,
-    costPrice: number = 0, marginPercentage: number = 30
+    costPrice: number = 0, marginPercentage: number = 30, categoryId: number | null = null
 ): Promise<number> => {
     if (barcode) {
         const existing = await getProductByBarcode(barcode);
         if (existing) {
             if (existing.is_active === 0) {
                 await dbResult.runAsync(
-                    'UPDATE products SET name = ?, price = ?, stock = ?, cost_price = ?, margin_percentage = ?, is_active = 1 WHERE id = ?',
-                    name, price, stock, costPrice, marginPercentage, existing.id!
+                    'UPDATE products SET name = ?, price = ?, stock = ?, cost_price = ?, margin_percentage = ?, category_id = ?, is_active = 1 WHERE id = ?',
+                    name, price, stock, costPrice, marginPercentage, categoryId, existing.id!
                 );
                 return existing.id!;
             }
@@ -52,15 +78,15 @@ export const addProduct = async (
         }
     }
     const result = await dbResult.runAsync(
-        'INSERT INTO products (name, price, barcode, stock, is_active, cost_price, margin_percentage) VALUES (?, ?, ?, ?, 1, ?, ?)',
-        name, price, barcode, stock, costPrice, marginPercentage
+        'INSERT INTO products (name, price, barcode, stock, is_active, cost_price, margin_percentage, category_id) VALUES (?, ?, ?, ?, 1, ?, ?, ?)',
+        name, price, barcode, stock, costPrice, marginPercentage, categoryId
     );
     return result.lastInsertRowId as number;
 };
 
 export const updateProduct = async (
     id: number, name: string, price: number, barcode: string, stock: number,
-    costPrice: number = 0, marginPercentage: number = 30
+    costPrice: number = 0, marginPercentage: number = 30, categoryId: number | null = null
 ): Promise<number> => {
     if (barcode) {
         const existing = await getProductByBarcode(barcode);
@@ -69,8 +95,8 @@ export const updateProduct = async (
         }
     }
     await dbResult.runAsync(
-        'UPDATE products SET name = ?, price = ?, barcode = ?, stock = ?, cost_price = ?, margin_percentage = ? WHERE id = ?',
-        name, price, barcode, stock, costPrice, marginPercentage, id
+        'UPDATE products SET name = ?, price = ?, barcode = ?, stock = ?, cost_price = ?, margin_percentage = ?, category_id = ? WHERE id = ?',
+        name, price, barcode, stock, costPrice, marginPercentage, categoryId, id
     );
     return id;
 };

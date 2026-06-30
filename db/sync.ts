@@ -74,18 +74,21 @@ const ensureSchema = async (): Promise<void> => {
 
 export const pushToTurso = async (deviceId: number): Promise<void> => {
     await ensureSchema(); // garantiza tablas y columnas (incl. migraciones) antes de escribir
-    const [users, pins, products, closings, txs, items, movements] = await Promise.all([
+    const [users, pins, categories, products, closings, txs, items, movements] = await Promise.all([
         dbResult.getAllAsync<{ id: number; name: string; is_active: number; created_at: string }>(
             'SELECT id, name, is_active, created_at FROM users'
         ),
         dbResult.getAllAsync<{ id: number; user_id: number | null; pin: string; created_at: string }>(
             'SELECT id, user_id, pin, created_at FROM checkout_pins'
         ),
+        dbResult.getAllAsync<{ id: number; name: string; is_active: number; created_at: string }>(
+            'SELECT id, name, is_active, created_at FROM categories'
+        ),
         dbResult.getAllAsync<{
             id: number; name: string; price: number; cost_price: number;
-            margin_percentage: number; barcode: string | null; stock: number;
-            is_active: number; created_at: string;
-        }>('SELECT id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at FROM products'),
+            margin_percentage: number; barcode: string | null; category_id: number | null;
+            stock: number; is_active: number; created_at: string;
+        }>('SELECT id, name, price, cost_price, margin_percentage, barcode, category_id, stock, is_active, created_at FROM products'),
         dbResult.getAllAsync<{
             id: number; opened_at: string; closed_at: string;
             total_sales: number; summary_json: string; created_at: string;
@@ -120,13 +123,19 @@ export const pushToTurso = async (deviceId: number): Promise<void> => {
             args: [pn.id, deviceId, pn.user_id ?? null, pn.pin, pn.created_at],
         });
     }
+    for (const c of categories) {
+        statements.push({
+            sql: `INSERT OR REPLACE INTO categories (id, device_id, name, is_active, created_at) VALUES (?, ?, ?, ?, ?)`,
+            args: [c.id, deviceId, c.name, c.is_active, c.created_at],
+        });
+    }
     for (const p of products) {
         statements.push({
             sql: `INSERT OR REPLACE INTO products
-                  (id, device_id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  (id, device_id, name, price, cost_price, margin_percentage, barcode, category_id, stock, is_active, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             args: [p.id, deviceId, p.name, p.price, p.cost_price, p.margin_percentage,
-                   p.barcode ?? null, p.stock, p.is_active, p.created_at],
+                   p.barcode ?? null, p.category_id ?? null, p.stock, p.is_active, p.created_at],
         });
     }
     for (const c of closings) {
@@ -192,19 +201,19 @@ const buildProductStmts = async (
     const placeholders = ids.map(() => '?').join(',');
     const products = await dbResult.getAllAsync<{
         id: number; name: string; price: number; cost_price: number;
-        margin_percentage: number; barcode: string | null; stock: number;
-        is_active: number; created_at: string;
+        margin_percentage: number; barcode: string | null; category_id: number | null;
+        stock: number; is_active: number; created_at: string;
     }>(
-        `SELECT id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at
+        `SELECT id, name, price, cost_price, margin_percentage, barcode, category_id, stock, is_active, created_at
          FROM products WHERE id IN (${placeholders})`,
         ...ids
     );
     return products.map(p => ({
         sql: `INSERT OR REPLACE INTO products
-              (id, device_id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (id, device_id, name, price, cost_price, margin_percentage, barcode, category_id, stock, is_active, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [p.id, deviceId, p.name, p.price, p.cost_price, p.margin_percentage,
-               p.barcode ?? null, p.stock, p.is_active, p.created_at] as (string | number | null)[],
+               p.barcode ?? null, p.category_id ?? null, p.stock, p.is_active, p.created_at] as (string | number | null)[],
     }));
 };
 
@@ -295,6 +304,20 @@ export const pushUserToTurso = async (deviceId: number, userId: number): Promise
     });
 };
 
+// Sube una categoría puntual (alta/edición/activar-desactivar) al instante.
+export const pushCategoryToTurso = async (deviceId: number, categoryId: number): Promise<void> => {
+    await withPendingQueue(deviceId, async () => {
+        const c = await dbResult.getFirstAsync<{ id: number; name: string; is_active: number; created_at: string }>(
+            'SELECT id, name, is_active, created_at FROM categories WHERE id = ?', categoryId
+        );
+        if (!c) return;
+        await tursoExecute([{
+            sql: `INSERT OR REPLACE INTO categories (id, device_id, name, is_active, created_at) VALUES (?, ?, ?, ?, ?)`,
+            args: [c.id, deviceId, c.name, c.is_active, c.created_at],
+        }]);
+    });
+};
+
 // pushToTurso already includes all local cash_closings, so this is just an alias
 export const pushClosingToTurso = async (
     deviceId: number,
@@ -307,11 +330,12 @@ export const pushClosingToTurso = async (
 };
 
 export const restoreFromTurso = async (deviceId: number): Promise<void> => {
-    const [userResults, pinResults, productResults, closingResults, txResults, itemResults, movResults] = await tursoExecute([
+    const [userResults, pinResults, categoryResults, productResults, closingResults, txResults, itemResults, movResults] = await tursoExecute([
         { sql: 'SELECT id, name, is_active, created_at FROM users WHERE device_id = ?', args: [deviceId] },
         { sql: 'SELECT id, user_id, pin, created_at FROM checkout_pins WHERE device_id = ?', args: [deviceId] },
+        { sql: 'SELECT id, name, is_active, created_at FROM categories WHERE device_id = ?', args: [deviceId] },
         {
-            sql: `SELECT id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at
+            sql: `SELECT id, name, price, cost_price, margin_percentage, barcode, category_id, stock, is_active, created_at
                   FROM products WHERE device_id = ?`,
             args: [deviceId],
         },
@@ -345,12 +369,16 @@ export const restoreFromTurso = async (deviceId: number): Promise<void> => {
             sql: 'INSERT OR REPLACE INTO checkout_pins (id, user_id, pin, created_at) VALUES (?, ?, ?, ?)',
             args: [p.id, p.user_id ?? null, p.pin, p.created_at] as (string | number | null)[],
         })),
+        ...(categoryResults ?? []).map(c => ({
+            sql: 'INSERT OR REPLACE INTO categories (id, name, is_active, created_at) VALUES (?, ?, ?, ?)',
+            args: [c.id, c.name, c.is_active, c.created_at] as (string | number | null)[],
+        })),
         ...(productResults ?? []).map(p => ({
             sql: `INSERT OR REPLACE INTO products
-                  (id, name, price, cost_price, margin_percentage, barcode, stock, is_active, created_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  (id, name, price, cost_price, margin_percentage, barcode, category_id, stock, is_active, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             args: [p.id, p.name, p.price, p.cost_price, p.margin_percentage,
-                   p.barcode, p.stock, p.is_active, p.created_at] as (string | number | null)[],
+                   p.barcode, p.category_id ?? null, p.stock, p.is_active, p.created_at] as (string | number | null)[],
         })),
         ...(closingResults ?? []).map(c => ({
             sql: `INSERT OR IGNORE INTO cash_closings (opened_at, closed_at, total_sales, summary_json, created_at)

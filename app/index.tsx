@@ -1,6 +1,6 @@
 import { Modal, StyleSheet } from 'react-native';
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,14 +36,37 @@ import { User, Product } from '@/db/schemas';
 import { isConfigured } from '@/db/turso';
 import { getDeviceConfig, pushTransactionToTurso } from '@/db/sync';
 
+// Filtros del POS. ALL = sin filtro (todos los productos, comportamiento original).
+// ARTESANAL = categoría derivada: productos sin código de barras (no se pueden escanear).
+const ALL = '__all__';
+const ARTESANAL = '__artesanal__';
+type Filter = typeof ALL | typeof ARTESANAL | number;
+
 export default function POSScreen() {
     const toast = useToast();
 
     const { cart, addToCart, updateQuantity, clearCart, cartTotal } = useCart();
-    const { users, products, refresh } = useProductSearch();
+    const { users, products, categories, refresh } = useProductSearch();
     const { isScanning, startScanning, stopScanning } = useScanner();
 
     const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+
+    // Navegación por categorías. Por defecto sin filtro: muestra todos los productos.
+    const [activeFilter, setActiveFilter] = useState<Filter>(ALL);
+    const [showCategoryPanel, setShowCategoryPanel] = useState(false);
+
+    const isArtesanal = (p: Product) => !p.barcode || p.barcode.trim() === '';
+
+    // Productos visibles en la grilla según el filtro activo
+    const visibleProducts = useMemo(() => {
+        if (activeFilter === ALL) return products;
+        if (activeFilter === ARTESANAL) return products.filter(isArtesanal);
+        return products.filter(p => p.category_id === activeFilter);
+    }, [products, activeFilter]);
+
+    const activeCategoryName = typeof activeFilter === 'number'
+        ? (categories.find(c => c.id === activeFilter)?.name ?? '')
+        : '';
 
     // Checkout modal state
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
@@ -217,9 +240,61 @@ export default function POSScreen() {
                         <ButtonText>Escanear Producto</ButtonText>
                     </Button>
 
+                    {/* Navegación por categorías (sin filtro por defecto = Todos) */}
+                    <VStack space="xs" mb="$3">
+                        <Text size="sm" fontWeight="$semibold" color="$coolGray500">Categorías</Text>
+                        <HStack space="sm" alignItems="center" flexWrap="wrap">
+                            <Pressable
+                                onPress={() => setActiveFilter(ALL)}
+                                bg={activeFilter === ALL ? '$blue600' : '$coolGray100'}
+                                borderRadius="$full" px="$4" py="$2"
+                            >
+                                <Text fontWeight="$semibold" color={activeFilter === ALL ? '$white' : '$coolGray700'}>
+                                    Todos
+                                </Text>
+                            </Pressable>
+
+                            <Pressable
+                                onPress={() => setActiveFilter(ARTESANAL)}
+                                bg={activeFilter === ARTESANAL ? '$blue600' : '$coolGray100'}
+                                borderRadius="$full" px="$4" py="$2"
+                            >
+                                <Text fontWeight="$semibold" color={activeFilter === ARTESANAL ? '$white' : '$coolGray700'}>
+                                    Artesanales
+                                </Text>
+                            </Pressable>
+
+                            {typeof activeFilter === 'number' && (
+                                <Box bg="$blue600" borderRadius="$full" px="$4" py="$2">
+                                    <Text fontWeight="$semibold" color="$white">{activeCategoryName}</Text>
+                                </Box>
+                            )}
+
+                            {categories.length > 0 && (
+                                <Pressable
+                                    onPress={() => setShowCategoryPanel(true)}
+                                    borderWidth={1} borderColor="$coolGray300" borderRadius="$full" px="$4" py="$2"
+                                >
+                                    <Text color="$coolGray700">Mostrar más ▸</Text>
+                                </Pressable>
+                            )}
+                        </HStack>
+                    </VStack>
+
                     <ScrollView flex={1}>
                         <Box flexDirection="row" flexWrap="wrap" gap="$3" pb="$4">
-                            {products.map(product => {
+                            {visibleProducts.length === 0 && (
+                                <Box w="100%" alignItems="center" py="$8">
+                                    <Text color="$coolGray400">
+                                        {activeFilter === ALL
+                                            ? 'No hay productos'
+                                            : activeFilter === ARTESANAL
+                                                ? 'No hay productos artesanales'
+                                                : `Sin productos en "${activeCategoryName}"`}
+                                    </Text>
+                                </Box>
+                            )}
+                            {visibleProducts.map(product => {
                                 const outOfStock = product.stock <= 0;
                                 const lowStock = product.stock > 0 && product.stock <= 5;
                                 return (
@@ -399,6 +474,69 @@ export default function POSScreen() {
                         </Button>
                     </Box>
                 </Box>
+            </Modal>
+
+            {/* Panel lateral de categorías */}
+            <Modal visible={showCategoryPanel} animationType="fade" transparent onRequestClose={() => setShowCategoryPanel(false)}>
+                <HStack flex={1}>
+                    <Box
+                        w="78%" bg="$white" h="100%" p="$5"
+                        shadowColor="$black" shadowOffset={{ width: 2, height: 0 }}
+                        shadowOpacity={0.2} shadowRadius={6} elevation={12}
+                    >
+                        <Heading size="lg" mb="$4">Categorías</Heading>
+                        <ScrollView>
+                            <VStack space="sm">
+                                <Pressable
+                                    onPress={() => { setActiveFilter(ALL); setShowCategoryPanel(false); }}
+                                    bg={activeFilter === ALL ? '$blue50' : '$coolGray50'}
+                                    borderWidth={1} borderColor={activeFilter === ALL ? '$blue300' : '$coolGray200'}
+                                    borderRadius="$lg" px="$4" py="$3"
+                                >
+                                    <HStack justifyContent="space-between" alignItems="center">
+                                        <Text fontWeight="$bold" color="$coolGray800">Todos</Text>
+                                        <Text size="sm" color="$coolGray500">{products.length}</Text>
+                                    </HStack>
+                                </Pressable>
+
+                                <Pressable
+                                    onPress={() => { setActiveFilter(ARTESANAL); setShowCategoryPanel(false); }}
+                                    bg={activeFilter === ARTESANAL ? '$blue50' : '$coolGray50'}
+                                    borderWidth={1} borderColor={activeFilter === ARTESANAL ? '$blue300' : '$coolGray200'}
+                                    borderRadius="$lg" px="$4" py="$3"
+                                >
+                                    <HStack justifyContent="space-between" alignItems="center">
+                                        <VStack>
+                                            <Text fontWeight="$bold" color="$coolGray800">Artesanales</Text>
+                                            <Text size="xs" color="$coolGray500">Sin código de barras</Text>
+                                        </VStack>
+                                        <Text size="sm" color="$coolGray500">{products.filter(isArtesanal).length}</Text>
+                                    </HStack>
+                                </Pressable>
+
+                                {categories.map(cat => {
+                                    const count = products.filter(p => p.category_id === cat.id).length;
+                                    const active = activeFilter === cat.id;
+                                    return (
+                                        <Pressable
+                                            key={cat.id}
+                                            onPress={() => { setActiveFilter(cat.id!); setShowCategoryPanel(false); }}
+                                            bg={active ? '$blue50' : '$coolGray50'}
+                                            borderWidth={1} borderColor={active ? '$blue300' : '$coolGray200'}
+                                            borderRadius="$lg" px="$4" py="$3"
+                                        >
+                                            <HStack justifyContent="space-between" alignItems="center">
+                                                <Text fontWeight="$semibold" color="$coolGray800">{cat.name}</Text>
+                                                <Text size="sm" color="$coolGray500">{count}</Text>
+                                            </HStack>
+                                        </Pressable>
+                                    );
+                                })}
+                            </VStack>
+                        </ScrollView>
+                    </Box>
+                    <Pressable flex={1} bg="rgba(0,0,0,0.5)" onPress={() => setShowCategoryPanel(false)} />
+                </HStack>
             </Modal>
 
             {/* Camera Modal */}

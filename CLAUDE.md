@@ -41,7 +41,8 @@ app/
   admin/
     _layout.tsx      — Guard con PIN 1234
     index.tsx        — Dashboard de admin + botón "Respaldar en la nube" + reset dev
-    products/        — CRUD de productos con precio costo + margen
+    products/        — CRUD de productos (costo+margen, categoría obligatoria, búsqueda por nombre/código)
+    categories/      — CRUD de categorías (crear, renombrar, activar/desactivar)
     users/           — CRUD de usuarios con gestión de PINs integrada por tarjeta
     inventory/       — Stock, recepciones y faltantes con historial de movimientos
     closing/         — Cierre de caja: reporte período, rankings, historial de cierres, Excel
@@ -64,7 +65,8 @@ utils/
 | Tabla | Columnas clave |
 |---|---|
 | `users` | id, name, is_active, created_at |
-| `products` | id, name, price, barcode, stock, is_active, cost_price, margin_percentage |
+| `categories` | id, name (UNIQUE), is_active, created_at |
+| `products` | id, name, price, barcode, category_id FK, stock, is_active, cost_price, margin_percentage |
 | `transactions` | id, user_id, total, created_at |
 | `transaction_items` | id, transaction_id, product_id, price_at_purchase, quantity |
 | `checkout_pins` | id, pin, user_id FK, is_used, created_at |
@@ -123,7 +125,8 @@ Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vi
 | `devices` | id AUTOINCREMENT, name, created_at |
 | `users` | PK (id, device_id) |
 | `checkout_pins` | PK (id, device_id), user_id, pin, created_at (sin UNIQUE global) |
-| `products` | PK (id, device_id) |
+| `categories` | PK (id, device_id), name, is_active, created_at |
+| `products` | PK (id, device_id), incluye `category_id` |
 | `transactions` | PK (id, device_id) |
 | `transaction_items` | PK (id, device_id) |
 | `stock_movements` | PK (id, device_id) |
@@ -139,7 +142,7 @@ Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vi
 ### Qué se respalda y cuándo
 | Dato | Cuándo sube a Turso |
 |---|---|
-| Catálogo (alta/edición/baja de usuarios y productos) | **Inmediatamente** (background, upsert puntual vía `pushUserToTurso` / `pushProductToTurso`) |
+| Catálogo (alta/edición/baja de usuarios, productos y categorías) | **Inmediatamente** (background, upsert puntual vía `pushUserToTurso` / `pushProductToTurso` / `pushCategoryToTurso`) |
 | PINs de checkout | **Inmediatamente** al crear/regenerar/borrar (background, set completo vía `pushPinsToTurso`) |
 | Cierres de caja | Manual y en cada cierre de caja |
 | Transacciones + ítems + **stock de los productos vendidos** | **Inmediatamente** después de cada venta (background) |
@@ -175,26 +178,26 @@ Admin → "⚙ Reset (dev)" ofrece:
 - ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
 - ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
 - ✅ Feature 7: Turso backup/restore — push en tiempo real por evento, restore completo, cola offline
-- ⬜ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
+- ✅ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
 - ⬜ Feature 10: Ícono de app — asset para EAS Build (Android adaptive icon)
 - ⬜ Feature 8: Calibración visual — azul de Gluestack como color primario consistente en toda la app
 - ⬜ Fase de pruebas exhaustivas — flujos completos en dispositivo real antes de build de producción
 
 ## Próximos pasos (orden de ejecución por dificultad, visual al final)
 
-Orden acordado: **1) Limpieza → 2) Feature 9 (categorías) → 3) Pruebas exhaustivas → 4) Feature 10 (ícono) → 5) Feature 8 (azul)**. Lo funcional primero, lo visual (bajo riesgo) al final sobre una base ya probada.
+Orden acordado: **1) Limpieza ✅ → 2) Feature 9 (categorías) ✅ → 3) Pruebas exhaustivas → 4) Feature 10 (ícono) → 5) Feature 8 (azul)**. Lo funcional primero, lo visual (bajo riesgo) al final sobre una base ya probada.
 
-### 1. Limpieza técnica (trivial, sin riesgo)
-- Borrar `app/admin/pins/` — pantalla legacy del enfoque viejo de PINs (sueltos, sin usuario). Hoy los PINs se gestionan por usuario desde `admin/users/`; este archivo quedó roto (firmas desactualizadas, `getActivePins` ya no existe) y desconectado.
-- Centralizar el PIN admin `1234` (antes duplicado en `admin/_layout.tsx` e `history.tsx`) en `utils/constants.ts` → `ADMIN_PIN`, leído de `EXPO_PUBLIC_ADMIN_PIN`.
-- Marcar como deprecada la columna `is_used` de `checkout_pins` (los PINs son reusables, ya no se consume).
+### 1. Limpieza técnica ✅
+- Borrado `app/admin/pins/` (legacy roto). PIN admin centralizado en `utils/constants.ts` → `ADMIN_PIN` (lee `EXPO_PUBLIC_ADMIN_PIN`). Columna `is_used` deprecada.
 
-### 2. Feature 9 — Categorías en el POS (media)
-- Nueva columna `category` en la tabla `products` (migración `ALTER TABLE`)
-- CRUD de categoría en `app/admin/products/` (selector al crear/editar producto)
-- Chips de filtro horizontal en `app/index.tsx` sobre la grilla — "Todos" + una chip por categoría con productos activos
-- Filtrado client-side sobre `products` ya cargados (sin query extra)
-- **⚠️ Sync:** agregar `category` también al schema Turso y a `pushToTurso`/`restoreFromTurso` en `sync.ts`, o el backup queda incompleto sin error visible
+### 2. Feature 9 — Categorías en el POS ✅
+- **Categorías como entidad propia** (tabla `categories`, no strings): id, name (UNIQUE), is_active. Evita errores/duplicados por texto libre. `products.category_id` FK → `categories.id`.
+- **Categoría obligatoria** al crear/editar producto (selector de categorías activas en `admin/products`, sin texto libre). Validación: no se guarda sin categoría.
+- **Panel admin** `app/admin/categories/`: crear, renombrar, activar/desactivar. Desactivar no toca los productos ya asignados, solo la oculta del selector y de los filtros. Sync en tiempo real (`pushCategoryToTurso`) + push/restore completo.
+- **Artesanales** = categoría derivada (no almacenada): productos **sin código de barras** (`isArtesanal` = barcode vacío). Son los que no se pueden escanear.
+- POS (`app/index.tsx`): el escáner sigue arriba como camino primario. Filtros: **Todos** (default, sin filtro → muestra todo como antes), *Artesanales*, y "Mostrar más ▸" → panel lateral con Todos + Artesanales + cada categoría activa con su conteo. Seleccionar filtra la grilla (`visibleProducts` por `category_id`, client-side). Categorías cargadas en `useProductSearch`.
+- Admin de productos: la lista muestra el **nombre de la categoría** (resuelto con `getAllCategories`, incluso si está inactiva) en vez del código; Stock y Código de Barras en líneas separadas; **búsqueda rápida** por nombre (accent-insensitive) o código de barras.
+- Nota: la animación del panel es `fade` (anchored-left); el slide izq→der queda para el pulido visual (Feature 8).
 
 ### 3. Fase de pruebas exhaustivas (alta)
 Flujos a cubrir antes de build de producción:

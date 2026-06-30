@@ -1,18 +1,20 @@
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { User, Product, getUsers, getProducts } from '@/db/queries';
+import { User, Category, Product, getUsers, getProducts, getCategories } from '@/db/queries';
 
 export const useProductSearch = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [u, p] = await Promise.all([getUsers(), getProducts()]);
+            const [u, p, c] = await Promise.all([getUsers(), getProducts(), getCategories()]);
             setUsers(u);
             setProducts(p);
+            setCategories(c);
         } catch (e) {
             console.error(e);
         } finally {
@@ -26,5 +28,5 @@ export const useProductSearch = () => {
         }, [])
     );
 
-    return { users, products, isLoading, refresh: loadData };
+    return { users, products, categories, isLoading, refresh: loadData };
 };

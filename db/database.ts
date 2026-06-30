@@ -14,14 +14,23 @@ export const initDatabase = async () => {
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 price REAL NOT NULL,
                 barcode TEXT,
+                category_id INTEGER,
                 stock INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (category_id) REFERENCES categories (id)
             );
 
             CREATE TABLE IF NOT EXISTS transactions (
@@ -117,6 +126,14 @@ export const initDatabase = async () => {
 
         try {
             await dbResult.execAsync('ALTER TABLE products ADD COLUMN margin_percentage INTEGER DEFAULT 30;');
+        } catch (e) {
+            if (e instanceof Error && !e.message.includes('duplicate column name')) {
+                console.log('Migration error:', e);
+            }
+        }
+
+        try {
+            await dbResult.execAsync('ALTER TABLE products ADD COLUMN category_id INTEGER;');
         } catch (e) {
             if (e instanceof Error && !e.message.includes('duplicate column name')) {
                 console.log('Migration error:', e);
