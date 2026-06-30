@@ -12,6 +12,7 @@ import {
     getDeviceConfig, registerDevice, listDevices, restoreFromTurso,
     saveSetting, TursoDevice,
 } from '@/db/sync';
+import {Image} from 'react-native';
 import '../global.css';
 
 type SetupStep = 'choice' | 'new-name' | 'restore-list' | 'restoring' | 'done';
@@ -93,7 +94,9 @@ export default function Layout() {
         return (
             <GluestackUIProvider config={config}>
                 <Box flex={1} justifyContent="center" alignItems="center" bg="$white">
-                    <Text>Cargando sistema...</Text>
+                    <Image source={require('../assets/AntuanColor.png')}
+                    style={{ width: 150, height: 150 }} />
+                    <Text>Cargando ...</Text>
                 </Box>
             </GluestackUIProvider>
         );

@@ -230,8 +230,8 @@ Flujos a cubrir antes de build de producción:
 ### Feature 8 — Calibración visual ✅
 Hecha. Ver sección **"Sistema de color"** arriba para los roles semánticos. No queda `$purple`/`$green`/`$orange` en `app/`.
 
-### Feature 10 — Ícono de app (en progreso, fuera de commits de features)
-- Assets `assets/Antuan.png` / `AntuanColor.png` + `app.json` (nombre "Antuan POS", icon/splash/adaptiveIcon) + `Image` en pantalla de carga (`app/_layout.tsx`). Trabajo del usuario, sin commitear junto a las features.
+### Feature 10 — Ícono de app (branding aplicado)
+- Assets `assets/Antuan.png` / `AntuanColor.png` + `app.json` (nombre "Antuan POS", icon/splash/adaptiveIcon) + `Image` en pantalla de carga (`app/_layout.tsx`).
 - **Pendiente:** verificar zona segura del adaptive icon (logo al ~66% central con margen, o Android lo recorta); fondo del adaptive icon `#2563EB`. El ícono solo se ve en build real (EAS), no en dev.
 
 La **fase de pruebas exhaustivas** (sección 3 arriba, 10 flujos) queda como gate final antes del build de producción.
