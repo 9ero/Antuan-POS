@@ -55,14 +55,15 @@ db/
                        pushStockMovementToTurso, restoreFromTurso, cola offline pending_sync
 utils/
   pin.ts             — generatePin() sin caracteres ambiguos (sin O/0/I/1)
-.env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN (gitignored, NO tocar .env.example)
+  constants.ts       — ADMIN_PIN (lee EXPO_PUBLIC_ADMIN_PIN, fallback '1234'); usado por admin/_layout y history
+.env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN + EXPO_PUBLIC_ADMIN_PIN (gitignored, NO tocar .env.example)
 .env.example         — Plantilla de credenciales con placeholders (commiteado, solo para referencia)
 ```
 
 ## Schema de DB local (expo-sqlite, WAL mode)
 | Tabla | Columnas clave |
 |---|---|
-| `users` | id, name, created_at |
+| `users` | id, name, is_active, created_at |
 | `products` | id, name, price, barcode, stock, is_active, cost_price, margin_percentage |
 | `transactions` | id, user_id, total, created_at |
 | `transaction_items` | id, transaction_id, product_id, price_at_purchase, quantity |
@@ -121,6 +122,7 @@ Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vi
 |---|---|
 | `devices` | id AUTOINCREMENT, name, created_at |
 | `users` | PK (id, device_id) |
+| `checkout_pins` | PK (id, device_id), user_id, pin, created_at (sin UNIQUE global) |
 | `products` | PK (id, device_id) |
 | `transactions` | PK (id, device_id) |
 | `transaction_items` | PK (id, device_id) |
@@ -132,15 +134,20 @@ Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vi
 ### Flujo de primer inicio
 `app/_layout.tsx` detecta si Turso está configurado y no hay `device_turso_id` en `settings` → muestra pantalla de setup con dos opciones:
 1. **Nuevo dispositivo**: ingresa nombre → `registerDevice(name)` → guarda `device_turso_id` + `device_name` en settings
-2. **Restaurar copia**: `listDevices()` → lista de dispositivos con último cierre → seleccionar → `restoreFromTurso(deviceId)` → restaura **todo** (usuarios, productos, transacciones, ítems, movimientos, cierres) en una transacción atómica local
+2. **Restaurar copia**: `listDevices()` → lista de dispositivos con último cierre → seleccionar → `restoreFromTurso(deviceId)` → restaura **todo** (usuarios, PINs de checkout, productos, transacciones, ítems, movimientos, cierres) en una transacción atómica local
 
 ### Qué se respalda y cuándo
 | Dato | Cuándo sube a Turso |
 |---|---|
-| Usuarios + productos + stock | Manual ("Respaldar en la nube") y en cada cierre de caja |
+| Catálogo (alta/edición/baja de usuarios y productos) | **Inmediatamente** (background, upsert puntual vía `pushUserToTurso` / `pushProductToTurso`) |
+| PINs de checkout | **Inmediatamente** al crear/regenerar/borrar (background, set completo vía `pushPinsToTurso`) |
 | Cierres de caja | Manual y en cada cierre de caja |
-| Transacciones + ítems | **Inmediatamente** después de cada venta (background) |
-| Movimientos de stock | **Inmediatamente** después de cada recepción o faltante (background) |
+| Transacciones + ítems + **stock de los productos vendidos** | **Inmediatamente** después de cada venta (background) |
+| Movimientos de stock + **stock del producto afectado** | **Inmediatamente** después de cada recepción o faltante (background) |
+
+El `stock` de cada producto se refresca en Turso junto con la venta/movimiento que lo modifica (`buildProductStmts` en `sync.ts`), así un restore nunca trae stock desfasado. **Todo lo que el comprador crea/edita (usuarios, productos, PINs) sube al instante.** Lo único que espera al push completo es el movimiento `reason='venta'` (audit log, recuperado en el siguiente respaldo o cierre). `settings` nunca sube (local a propósito).
+
+**Soft delete de usuarios:** `deleteUser` hace `UPDATE is_active = 0` (no DELETE físico), igual que productos, para no orfanar transacciones — el historial resuelve el nombre con `JOIN users`, un DELETE las haría desaparecer. `getUsers` filtra `is_active = 1`. La baja se propaga a Turso como un upsert normal.
 
 ### Cola offline (`pending_sync`)
 Si un push falla por falta de red, se guarda `pending_sync = 'true'` en settings. En el siguiente intento (venta, movimiento o manual), `withPendingQueue` detecta el flag y hace un `pushToTurso` completo antes de continuar. Si sigue sin red, el flag permanece acumulando hasta que haya conexión.
@@ -152,6 +159,8 @@ Si un push falla por falta de red, se guarda `pending_sync = 'true'` en settings
 | `device_name` | Nombre del punto de venta |
 | `last_sync_at` | ISO timestamp del último push exitoso |
 | `pending_sync` | `'true'` si hay datos sin sincronizar |
+
+**`settings` NO se respalda en Turso a propósito** — es config local del dispositivo (su identidad `device_turso_id` y estado de sync). Restaurarla rompería la identidad del device. Todas las demás tablas locales sí se respaldan.
 
 ### Botón dev (solo en desarrollo)
 Admin → "⚙ Reset (dev)" ofrece:
@@ -166,28 +175,28 @@ Admin → "⚙ Reset (dev)" ofrece:
 - ✅ Feature 5: Cierre de caja con rankings, estadísticas y export Excel (4 hojas)
 - ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
 - ✅ Feature 7: Turso backup/restore — push en tiempo real por evento, restore completo, cola offline
-- ⬜ Feature 8: Calibración visual — azul de Gluestack como color primario consistente en toda la app
 - ⬜ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
 - ⬜ Feature 10: Ícono de app — asset para EAS Build (Android adaptive icon)
+- ⬜ Feature 8: Calibración visual — azul de Gluestack como color primario consistente en toda la app
 - ⬜ Fase de pruebas exhaustivas — flujos completos en dispositivo real antes de build de producción
 
-## Próximos pasos (Features 8–10 + pruebas)
+## Próximos pasos (orden de ejecución por dificultad, visual al final)
 
-### Feature 8 — Calibración visual
-El azul de Gluestack (`$blue600` / `$blue500`) ya se usa en algunos lugares. Hay que auditarlo y aplicarlo de forma consistente como color primario en botones de acción principal, chips activos, badges, indicadores de estado y links. El resto de la UI usa grises neutros de NativeWind — no tocar esos.
+Orden acordado: **1) Limpieza → 2) Feature 9 (categorías) → 3) Pruebas exhaustivas → 4) Feature 10 (ícono) → 5) Feature 8 (azul)**. Lo funcional primero, lo visual (bajo riesgo) al final sobre una base ya probada.
 
-### Feature 9 — Categorías en el POS
+### 1. Limpieza técnica (trivial, sin riesgo)
+- Borrar `app/admin/pins/` — pantalla legacy del enfoque viejo de PINs (sueltos, sin usuario). Hoy los PINs se gestionan por usuario desde `admin/users/`; este archivo quedó roto (firmas desactualizadas, `getActivePins` ya no existe) y desconectado.
+- Centralizar el PIN admin `1234` (antes duplicado en `admin/_layout.tsx` e `history.tsx`) en `utils/constants.ts` → `ADMIN_PIN`, leído de `EXPO_PUBLIC_ADMIN_PIN`.
+- Marcar como deprecada la columna `is_used` de `checkout_pins` (los PINs son reusables, ya no se consume).
+
+### 2. Feature 9 — Categorías en el POS (media)
 - Nueva columna `category` en la tabla `products` (migración `ALTER TABLE`)
 - CRUD de categoría en `app/admin/products/` (selector al crear/editar producto)
 - Chips de filtro horizontal en `app/index.tsx` sobre la grilla — "Todos" + una chip por categoría con productos activos
 - Filtrado client-side sobre `products` ya cargados (sin query extra)
+- **⚠️ Sync:** agregar `category` también al schema Turso y a `pushToTurso`/`restoreFromTurso` en `sync.ts`, o el backup queda incompleto sin error visible
 
-### Feature 10 — Ícono de app
-- Asset en `assets/` (1024×1024 PNG, fondo azul con inicial o logo)
-- Configurar `icon`, `android.adaptiveIcon.foregroundImage` y `android.adaptiveIcon.backgroundColor` en `app.json`
-- Requiere rebuild del APK con EAS Build
-
-### Fase de pruebas exhaustivas
+### 3. Fase de pruebas exhaustivas (alta)
 Flujos a cubrir antes de build de producción:
 1. Venta completa: agregar al carrito → checkout con PIN → stock se descuenta → sube a Turso
 2. Stock bajo: badge rojo aparece → recepción → stock sube → movimiento en Turso
@@ -199,3 +208,11 @@ Flujos a cubrir antes de build de producción:
 8. Historial + filtros: período actual, hoy, semana, mes, todos — datos correctos en cada uno
 9. Excel historial: 3 hojas con columnas ajustadas y datos correctos
 10. Admin: productos, usuarios, PINs, inventario — CRUD completo sin errores
+
+### 4. Feature 10 — Ícono de app (baja, visual)
+- Asset en `assets/` (1024×1024 PNG, fondo azul con inicial o logo)
+- Configurar `icon`, `android.adaptiveIcon.foregroundImage` y `android.adaptiveIcon.backgroundColor` en `app.json`
+- Requiere rebuild del APK con EAS Build
+
+### 5. Feature 8 — Calibración visual (baja, visual)
+El azul de Gluestack (`$blue600` / `$blue500`) ya se usa en algunos lugares. Hay que auditarlo y aplicarlo de forma consistente como color primario en botones de acción principal, chips activos, badges, indicadores de estado y links. El resto de la UI usa grises neutros de NativeWind — no tocar esos.
