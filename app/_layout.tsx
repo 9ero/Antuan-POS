@@ -108,6 +108,11 @@ export default function Layout() {
                 <Box flex={1} bg="$coolGray50" justifyContent="center" px="$6">
                     <VStack space="xl">
                         <VStack space="xs" alignItems="center" mb="$4">
+                            <Image
+                                source={require('../assets/Antuan.png')}
+                                style={{ width: 120, height: 120 }}
+                                resizeMode="contain"
+                            />
                             <Heading size="2xl">Antuan POS</Heading>
                             <Text color="$coolGray500" textAlign="center">
                                 Primera configuración del dispositivo
