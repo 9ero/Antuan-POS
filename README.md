@@ -1,315 +1,222 @@
-# 🛒 Antuan POS - Sistema de Punto de Venta
+<div align="center">
 
-[![React Native](https://img.shields.io/badge/React%20Native-0.81-blue.svg)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-SDK%2054-000020.svg)](https://expo.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+# 🛒 Antuan POS
 
-Sistema de punto de venta (POS) móvil desarrollado con **React Native** y **Expo**, diseñado para pequeños negocios y tiendas de abarrotes. Incluye gestión de inventario, clientes, historial de ventas y exportación a Excel.
+**Punto de venta móvil _offline-first_ para tiendas pequeñas.**
 
----
+[![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB.svg?logo=react)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-SDK%2054-000020.svg?logo=expo)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?logo=typescript)](https://www.typescriptlang.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57.svg?logo=sqlite)](https://www.sqlite.org/)
+[![License](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0-lightgrey.svg)](./LICENSE)
 
-## 👨‍💻 Desarrollador
-
-**Juan Miguel Fernández Araya**  
-📧 fernandezarayajuanmiguel@gmail.com
+</div>
 
 ---
 
-## ✨ Características Principales
+Antuan POS es una aplicación de punto de venta para Android pensada para el día a día de una
+tienda pequeña en Costa Rica. Funciona **100 % sin conexión** (base de datos local SQLite) y usa
+la nube **solo como respaldo** (cold storage). Está diseñada para operar directamente sobre un
+teléfono fijo en el mostrador, con toda la interfaz en español y precios en colones (₡).
 
-### 🏪 Punto de Venta (POS)
-- **Escáner de Código de Barras**: Agrega productos usando la cámara del dispositivo
-- **Búsqueda Manual**: Encuentra productos y clientes fácilmente
-- **Carrito Inteligente**: 
-  - Gestión de cantidades con validación de stock
-  - Cálculo automático de totales en Colones (₡)
-  - Prevención de sobreventa
-- **Interfaz Optimizada**: Diseño vertical con carrito fijo en la parte inferior
-- **Confirmación Visual**: Modal de confirmación al escanear productos
+Se distribuye como **APK** (fuera de Play Store), generado con **Expo EAS Build**.
 
-### 📦 Gestión de Inventario
-- **CRUD Completo**: Crear, leer, actualizar y eliminar productos
-- **Control de Stock**: Sistema de inventario en tiempo real
-- **Códigos de Barras**: Escáner integrado para registro rápido
-- **Soft Delete**: Los productos eliminados se desactivan, no se borran
-- **Reactivación Inteligente**: Reutiliza códigos de barras de productos eliminados
-- **Validación**: Previene duplicación de códigos de barras activos
-
-### 👥 Gestión de Clientes
-- **Base de Datos de Clientes**: Registro completo de información
-- **Edición en Línea**: Modifica datos de clientes existentes
-- **Búsqueda Rápida**: Encuentra clientes por nombre
-
-### 📊 Historial y Reportes
-- **Registro de Ventas**: Visualiza todas las transacciones por fecha
-- **Detalles Completos**: Productos, cantidades, precios y totales
-- **Exportación Excel**: Genera reportes `.xlsx` con rango de fechas
-- **Compartir**: Envía reportes por WhatsApp, email, etc.
-- **Limpieza de Datos**: Borra historial con PIN de seguridad (1234)
-
-### 🔒 Seguridad
-- **Autenticación Admin**: PIN de acceso (por defecto: `1234`)
-- **Protección de Datos**: Confirmación requerida para acciones críticas
-- **SQLite Local**: Todos los datos se almacenan localmente en el dispositivo
+> **Nota:** Este es un proyecto real en uso. El repositorio es público con fines de estudio y
+> referencia; **todos los datos y credenciales sensibles están fuera del control de versiones**
+> (ver [Configuración](#-configuración-y-datos-sensibles)).
 
 ---
 
-## 🛠 Tecnologías Utilizadas
+## ✨ Características
 
-### Core
-- **React Native** `0.81.5` - Framework principal
-- **Expo** `~54.0.32` - Plataforma de desarrollo
-- **TypeScript** `~5.9.2` - Type safety
+### 🏪 Punto de venta
+- **Grilla de productos** con filtro por **categoría** y por **artesanales** (productos sin código de barras).
+- **Escáner de código de barras** con la cámara como camino primario de venta.
+- **Carrito expandible** con control de cantidades, validación de stock y prevención de sobreventa.
+- **Checkout con usuario + PIN**: cada venta se atribuye a un usuario mediante un PIN reutilizable.
+- Totales automáticos en **colones (₡)**.
 
-### UI/UX
-- **Gluestack UI** `^1.1.73` - Sistema de diseño moderno
-- **NativeWind** `^4.2.1` - TailwindCSS para React Native
-- **React Native Reanimated** `~4.1.1` - Animaciones fluidas
+### 💵 Precios: costo + margen
+- El precio se calcula desde el **costo** y un **margen** (20/30/40 %).
+- Redondeo a la moneda mínima de ₡5: `Math.round(costo * (1 + margen/100) / 5) * 5`.
 
-### Navegación y Estado
-- **Expo Router** `~6.0.22` - File-based routing
-- **React Hooks** - Gestión de estado (`useCart`, `useScanner`, `useProductSearch`)
+### 📦 Inventario
+- **Recepciones** y **faltantes** con historial de **movimientos de stock**.
+- El stock se gestiona **exclusivamente** desde Inventario y las ventas (nunca se pisa al editar el catálogo).
+- Alertas visuales de **stock bajo / sin stock**.
 
-### Base de Datos
-- **Expo SQLite** `~16.0.10` - Almacenamiento local persistente
-- **Zod** `^4.3.5` - Validación de schemas y tipos
+### 🗂️ Catálogo
+- **Productos**: CRUD con costo, margen, categoría obligatoria, código de barras opcional y búsqueda accent-insensitive. _Soft delete_ (se desactivan, no se borran) para no orfanar el historial.
+- **Categorías** como entidad propia (crear, renombrar, activar/desactivar).
+- **Usuarios** con gestión integrada de **PINs de checkout** (reutilizables, ligados al usuario).
 
-### Funcionalidades
-- **Expo Camera** `~17.0.10` - Escáner de códigos de barras
-- **Expo FileSystem** `~19.0.21` - Manejo de archivos
-- **Expo Sharing** `~14.0.8` - Compartir archivos
-- **XLSX** `^0.18.5` - Generación de archivos Excel
+### 📊 Historial y cierre de caja
+- **Historial de ventas** con filtros por período (hoy / semana / mes / período actual / todos) y estadísticas.
+- **Cierre de caja** con reporte del período, rankings (consumo más rápido, mayor ganancia) y estadísticas.
+- **Exportación a Excel** (`.xlsx`) con hojas múltiples y columnas auto-ajustadas, lista para compartir por WhatsApp / correo.
+
+### ☁️ Respaldo en la nube (Turso)
+- Backup/restore completo contra **Turso** (SQLite en la nube) mediante cliente HTTP nativo.
+- **Push por evento en tiempo real**: catálogo, PINs, ventas y movimientos suben al instante en segundo plano.
+- **Cola offline**: si no hay red, los cambios se marcan pendientes y se sincronizan en el siguiente intento con conexión.
+- **Restauración** completa al configurar un dispositivo nuevo (inventario independiente por dispositivo).
 
 ---
 
-## 📁 Estructura del Proyecto
+## 🧱 Arquitectura
+
+**Offline-first.** La app opera siempre contra la base de datos local (SQLite en modo WAL, con
+transacciones atómicas). Turso es únicamente respaldo: no hay dependencia de red para vender.
+
+```
+┌───────────────────────────┐        push por evento (background)
+│      Dispositivo Android    │  ───────────────────────────────►  ┌──────────────┐
+│  ┌──────────────────────┐  │        catálogo · ventas · stock     │    Turso     │
+│  │  SQLite local (WAL)   │  │                                      │ (cold storage│
+│  │  fuente de verdad     │  │  ◄───────────────────────────────   │  por device) │
+│  └──────────────────────┘  │        restore completo (setup)      └──────────────┘
+│   cola offline si no hay red│
+└───────────────────────────┘
+```
+
+---
+
+## 🛠 Stack
+
+| Área | Tecnología |
+|---|---|
+| Framework | React Native `0.81` + Expo `SDK 54` |
+| Lenguaje | TypeScript `5.9` |
+| Ruteo | Expo Router (file-based, directorio `app/`) |
+| UI | Gluestack UI v1 + NativeWind v4 (Tailwind para RN) |
+| Base de datos | `expo-sqlite` (WAL) · respaldo en **Turso** (HTTP nativo) |
+| Validación | Zod |
+| Cámara | `expo-camera` (escáner de barras) |
+| Excel | `xlsx` + `expo-file-system` + `expo-sharing` |
+| Build | Expo **EAS Build** (APK) |
+
+---
+
+## 📁 Estructura del proyecto
 
 ```
 Antuan-POS/
-├── app/                        # Pantallas de la aplicación
-│   ├── _layout.tsx            # Layout principal con provider
-│   ├── index.tsx              # Pantalla de POS
-│   ├── history.tsx            # Historial de ventas
-│   └── admin/                 # Módulo de administración
-│       ├── _layout.tsx        # Layout con autenticación
-│       ├── index.tsx          # Dashboard admin
-│       ├── products/
-│       │   └── index.tsx      # Gestión de productos
-│       └── users/
-│           └── index.tsx      # Gestión de usuarios
-├── db/                        # Capa de datos
-│   ├── database.ts           # Inicialización de SQLite
-│   ├── queries.ts            # Queries SQL
-│   ├── schemas.ts            # Schemas Zod
-│   └── types.ts              # Tipos TypeScript
-├── hooks/                     # Custom React Hooks
-│   ├── useCart.ts            # Lógica del carrito
-│   ├── useScanner.ts         # Control de cámara
-│   └── useProductSearch.ts   # Búsqueda de productos
-├── assets/                    # Imágenes e iconos
-├── package.json              # Dependencias
-└── README.md                 # Este archivo
+├── app/                     # Pantallas (Expo Router)
+│   ├── _layout.tsx          # Provider global + setup de dispositivo (primer inicio)
+│   ├── index.tsx            # POS: grilla, carrito, checkout (usuario + PIN)
+│   ├── history.tsx          # Historial de ventas + export Excel
+│   └── admin/               # Panel de administración (guard con PIN)
+│       ├── products/        # CRUD de productos (costo + margen)
+│       ├── categories/      # CRUD de categorías
+│       ├── users/           # Usuarios + gestión de PINs
+│       ├── inventory/       # Stock, recepciones y faltantes
+│       └── closing/         # Cierre de caja + Excel
+├── db/                      # Capa de datos
+│   ├── database.ts          # initDatabase() + migraciones
+│   ├── queries.ts           # Acceso a SQLite
+│   ├── schemas.ts           # Schemas Zod
+│   ├── turso.ts             # Cliente HTTP de Turso
+│   └── sync.ts              # Backup/restore + cola offline
+├── utils/                   # pin.ts, constants.ts
+├── assets/                  # Íconos y branding (Antuan)
+├── app.json                 # Config Expo (nombre, ícono, EAS)
+├── eas.json                 # Perfiles de build (preview / production)
+└── .env.example             # Plantilla de credenciales (sin secretos)
 ```
 
 ---
 
-## 🚀 Instalación y Ejecución
+## 🚀 Correr localmente
 
-### Prerrequisitos
-- **Node.js** (v18+)
-- **npm** o **yarn**
-- **Expo Go** app en tu dispositivo móvil ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) | [iOS](https://apps.apple.com/app/expo-go/id982107779))
+> La app funciona **sin Turso**: si no configurás credenciales, opera 100 % local (sin respaldo en la nube).
 
-### Instalación
+### Requisitos
+- **Node.js** 18+ y **npm**
+- **Expo Go** en un dispositivo Android (para desarrollo) o un emulador
 
-1. **Clonar el repositorio**
-   ```bash
-   git clone https://github.com/9ero/Antuan-POS.git
-   cd Antuan-POS
-   ```
-
-2. **Instalar dependencias**
-   ```bash
-   npm install
-   ```
-
-3. **Iniciar la aplicación**
-   ```bash
-   npx expo start -c
-   ```
-   > El flag `-c` limpia la caché de Metro Bundler (recomendado)
-
-4. **Probar en dispositivo**
-   - Escanea el código QR con **Expo Go**
-   - Alternativamente, usa `npx expo start --android` o `npx expo start --ios`
-
----
-
-## 📱 Guía de Uso
-
-### Realizar una Venta
-
-1. **Seleccionar Cliente**: Busca y selecciona el cliente
-2. **Agregar Productos**:
-   - Escanea código de barras, o
-   - Toca un producto de la cuadrícula
-3. **Gestionar Cantidades**: Usa los botones `+` y `-` en el carrito
-4. **Cobrar**: Presiona el botón "Cobrar" (requiere cliente y stock disponible)
-
-### Administración
-
-1. **Acceder**: Toca "Admin" → Ingresa PIN `1234`
-2. **Productos**:
-   - Presiona `+` para agregar
-   - Toca ✏️ para editar
-   - Toca 🗑️ para eliminar (soft delete)
-3. **Usuarios**: Misma lógica que productos
-
-### Exportar Historial
-
-1. Ve a "Historial"
-2. Toca "Exportar Excel"
-3. Comparte el archivo generado
-
----
-
-## 🗄️ Esquema de Base de Datos
-
-### Tabla: `users`
-| Campo       | Tipo    | Descripción                |
-|-------------|---------|----------------------------|
-| id          | INTEGER | Primary Key (Auto)         |
-| name        | TEXT    | Nombre del cliente         |
-| created_at  | TEXT    | Timestamp de creación      |
-
-### Tabla: `products`
-| Campo       | Tipo    | Descripción                |
-|-------------|---------|----------------------------|
-| id          | INTEGER | Primary Key (Auto)         |
-| name        | TEXT    | Nombre del producto        |
-| price       | REAL    | Precio en colones          |
-| barcode     | TEXT    | Código de barras (único y opcional)   |
-| stock       | INTEGER | Cantidad disponible        |
-| is_active   | INTEGER | 1=Activo, 0=Eliminado (soft delete)     |
-| created_at  | TEXT    | Timestamp de creación      |
-
-### Tabla: `transactions`
-| Campo       | Tipo    | Descripción                |
-|-------------|---------|----------------------------|
-| id          | INTEGER | Primary Key (Auto)         |
-| user_id     | INTEGER | FK → users.id              |
-| total       | REAL    | Total de la venta          |
-| created_at  | TEXT    | Timestamp de venta         |
-
-### Tabla: `transaction_items`
-| Campo              | Tipo    | Descripción                |
-|--------------------|---------|----------------------------|
-| id                 | INTEGER | Primary Key (Auto)         |
-| transaction_id     | INTEGER | FK → transactions.id       |
-| product_id         | INTEGER | FK → products.id           |
-| price_at_purchase  | REAL    | Precio al momento de venta |
-| quantity           | INTEGER | Cantidad vendida           |
-
----
-
-## 🔧 Scripts Disponibles
-
+### Pasos
 ```bash
-# Iniciar servidor de desarrollo
-npm start
+# 1. Clonar
+git clone https://github.com/9ero/Antuan-POS.git
+cd Antuan-POS
 
-# Iniciar limpiando caché (recomendado)
+# 2. Dependencias
+npm install
+
+# 3. Variables de entorno (copiar la plantilla y completar)
+cp .env.example .env
+
+# 4. Iniciar (el flag -c limpia la caché de Metro)
 npx expo start -c
-
-# Abrir en Android
-npm run android
-
-# Abrir en iOS
-npm run ios
-
-# Verificar tipos TypeScript
-npx tsc --noEmit
-
-# Limpiar y reinstalar dependencias
-rm -rf node_modules && npm install
 ```
+Escaneá el QR con **Expo Go**, o usá `npx expo start --android`.
 
----
-
-## 🐛 Solución de Problemas
-
-### Error: "SafeAreaView deprecated"
-**Causa**: Advertencia de dependencias externas (Gluestack UI, Expo Router)  
-**Solución**: Ignorar. El proyecto ya usa `react-native-safe-area-context`
-
-### Error: "No such column: is_active"
-**Causa**: Base de datos desactualizada  
-**Solución**: La migración se ejecuta automáticamente al iniciar la app
-
-### Vulnerabilidad en `xlsx`
-**Causa**: Librería desactualizada con CVEs conocidos  
-**Riesgo**: Bajo (solo generamos archivos, no los procesamos)  
-**Solución**: Esperar actualización o migrar a `exceljs`
-
-### Dependencias desactualizadas
+### Generar el APK (EAS Build)
 ```bash
-npx expo install --fix
+# Build en la nube de Expo (perfil preview → APK)
+npx eas-cli build --platform android --profile preview
+
+# Build local (no sube tu .env a la nube; requiere Android SDK/Java)
+npx eas-cli build --platform android --profile preview --local
 ```
 
 ---
 
-## 🎯 Roadmap / Mejoras Futuras
+## 🔐 Configuración y datos sensibles
 
-- [ ] Integración con impresora térmica Bluetooth
-- [ ] Soporte multi-moneda
-- [ ] Reportes gráficos (ventas por día/semana/mes)
-- [ ] Backup automático en la nube
-- [ ] Modo oscuro
-- [ ] Soporte multi-idioma (i18n)
-- [ ] Migrar de `xlsx` a `exceljs` (seguridad)
-- [ ] Autenticación biométrica (Touch ID / Face ID)
+Las credenciales viven en un archivo **`.env` que NO se versiona** (está en `.gitignore`). El
+repositorio solo incluye **`.env.example`** con placeholders. Las variables usan el prefijo
+`EXPO_PUBLIC_` porque se hornean en el build:
 
----
+| Variable | Descripción |
+|---|---|
+| `EXPO_PUBLIC_TURSO_URL` | URL de la base Turso de respaldo (opcional) |
+| `EXPO_PUBLIC_TURSO_TOKEN` | Token de acceso a Turso (opcional) |
+| `EXPO_PUBLIC_ADMIN_PIN` | PIN del panel de administración (por defecto `1234`) |
 
-## 📄 Licencia
-
-Este proyecto está licenciado bajo **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
-
-### ✅ Puedes:
-- **Compartir** — copiar y redistribuir el material en cualquier medio o formato
-- **Adaptar** — remezclar, transformar y construir sobre el material
-
-### ⚠️ Bajo los siguientes términos:
-- **Atribución** — Debes dar crédito apropiado, proporcionar un enlace a la licencia e indicar si se realizaron cambios
-- **No Comercial** — No puedes usar el material con fines comerciales
-- **Compartir Igual** — Si remezclas, transformas o construyes sobre el material, debes distribuir tus contribuciones bajo la misma licencia
-
-📜 **Licencia completa:** [LICENSE](./LICENSE)  
-🔗 **Más información:** https://creativecommons.org/licenses/by-nc-sa/4.0/
+> ⚠️ Nunca subas tu `.env` real ni tokens a un repositorio público. Para builds en la nube, tené
+> presente que el contexto de build puede incluir el `.env`; el build **local** evita ese envío.
 
 ---
 
-## 🤝 Contribuciones
+## 🗄️ Esquema de datos (local)
 
-¡Las contribuciones son bienvenidas! Si tienes sugerencias, encuentras bugs o quieres agregar funcionalidades:
+| Tabla | Descripción |
+|---|---|
+| `users` | Usuarios a los que se atribuyen las ventas (soft delete) |
+| `categories` | Categorías de producto (nombre único, activable) |
+| `products` | Catálogo: precio, costo, margen, categoría, stock, código de barras |
+| `transactions` / `transaction_items` | Ventas y sus líneas (precio al momento de compra) |
+| `checkout_pins` | PINs de checkout reutilizables, ligados a un usuario |
+| `stock_movements` | Recepciones y faltantes (auditoría de stock) |
+| `cash_closings` | Cierres de caja con resumen del período |
+| `settings` | Configuración local del dispositivo y estado de sync |
 
-1. **Fork** el proyecto
-2. Crea una **rama** para tu feature (`git checkout -b feature/AmazingFeature`)
-3. **Commit** tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. **Push** a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un **Pull Request**
-
-**Nota:** Recuerda que cualquier contribución debe respetar la licencia CC BY-NC-SA 4.0 (sin uso comercial).
-
----
-
-## 📞 Contacto
-
-**Juan Miguel Fernández Araya**  
-📧 fernandezarayajuanmiguel@gmail.com  
-🔗 [GitHub: 9ero](https://github.com/9ero)
+Migraciones con patrón `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` en `db/database.ts`.
 
 ---
 
-**Desarrollado con ❤️ en Costa Rica 🇨🇷**
+## 📜 Licencia
+
+Este proyecto se distribuye bajo la **[PolyForm Noncommercial License 1.0.0](./LICENSE)**.
+
+- ✅ **Uso no comercial permitido**: estudiar, modificar, usar y redistribuir para fines
+  personales, educativos, de investigación o de organizaciones sin fines de lucro.
+- ⚠️ **Uso comercial**: cualquier uso comercial —o modificación/derivado con fines
+  comerciales— **requiere autorización previa y por escrito del autor**.
+
+Para consultas de licenciamiento comercial, escribí a
+**fernandezarayajuanmiguel@gmail.com** antes de cualquier uso de este tipo.
+
+---
+
+## 👤 Autor
+
+**Juan Miguel Fernández Araya**
+📧 fernandezarayajuanmiguel@gmail.com · 🔗 [github.com/9ero](https://github.com/9ero)
+
+<div align="center">
+
+Hecho con ❤️ en Costa Rica 🇨🇷
+
+</div>

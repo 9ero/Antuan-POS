@@ -180,13 +180,13 @@ Admin → "⚙ Reset (dev)" ofrece:
 - ✅ Feature 6: Estadísticas en historial + filtro por período actual + burn rate
 - ✅ Feature 7: Turso backup/restore — push en tiempo real por evento, restore completo, cola offline
 - ✅ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
-- ⬜ Feature 10: Ícono de app — asset para EAS Build (Android adaptive icon)
+- ✅ Feature 10: Ícono de app — adaptive icon con zona segura al 66% (`adaptive-foreground.png`); EAS Build configurado; APK local verificado
 - ✅ Feature 8: Calibración visual — azul primario + acentos emerald/amber consistentes
-- ⬜ Fase de pruebas exhaustivas — flujos completos en dispositivo real antes de build de producción
+- 🔄 Fase de pruebas exhaustivas — EN CURSO: varios días operando el APK local en dispositivo real antes del build de producción
 
 ## Próximos pasos (orden de ejecución por dificultad, visual al final)
 
-Orden acordado: **1) Limpieza ✅ → 2) Feature 9 (categorías) ✅ → Feature 8 (color) ✅ → Feature 10 (ícono, en progreso) → Pruebas exhaustivas (al final)**. Lo funcional y lo visual primero; las pruebas exhaustivas como gate final antes del build.
+Orden acordado: **1) Limpieza ✅ → 2) Feature 9 (categorías) ✅ → Feature 8 (color) ✅ → Feature 10 (ícono) ✅ → Pruebas exhaustivas (EN CURSO)**. Lo funcional y lo visual primero; las pruebas exhaustivas como gate final antes del build de producción. **Estamos en la fase de pruebas: varios días operando el APK local en dispositivo real.**
 
 ## Sistema de color (Feature 8)
 Paleta aplicada de forma consistente (regla 60% neutro / 30% azul / 10% acento). Roles semánticos:
@@ -231,8 +231,20 @@ Flujos a cubrir antes de build de producción:
 ### Feature 8 — Calibración visual ✅
 Hecha. Ver sección **"Sistema de color"** arriba para los roles semánticos. No queda `$purple`/`$green`/`$orange` en `app/`.
 
-### Feature 10 — Ícono de app (branding aplicado)
-- Assets `assets/Antuan.png` / `AntuanColor.png` + `app.json` (nombre "Antuan POS", icon/splash/adaptiveIcon) + `Image` en pantalla de carga (`app/_layout.tsx`).
-- **Pendiente:** verificar zona segura del adaptive icon (logo al ~66% central con margen, o Android lo recorta); fondo del adaptive icon `#2563EB`. El ícono solo se ve en build real (EAS), no en dev.
+### Feature 10 — Ícono de app (branding aplicado) ✅
+- Assets: `assets/Antuan.png` (caricatura azul monocromática) / `AntuanColor.png` (color) / `assets/adaptive-foreground.png` (Antuan azul reducido al 66% sobre lienzo transparente).
+- `app.json`: nombre "Antuan POS", `icon` → `Antuan.png`, `splash` → `AntuanColor.png` (fondo blanco), `favicon` → `Antuan.png`.
+- **Zona segura del adaptive icon — RESUELTA:** `Antuan.png` original ocupaba el 71% ancho × 96% alto del lienzo → se desbordaba (Android recorta el ~18% de cada borde con la máscara). Solución: `adaptiveIcon.foregroundImage` → `assets/adaptive-foreground.png`, que es la caricatura azul **reducida al 66% central** con margen transparente en los 4 lados (sobrevive máscaras circulares/squircle). Generado con PIL: crop al bbox de contenido → resize a `0.66 * 1024` en el lado mayor → centrar en canvas 1024×1024 transparente.
+- **Fondo del adaptive icon: BLANCO `#ffffff`** (decisión del comprador — NO azul). El azul `#2563EB` es solo para la carga inicial (splash / pantalla de `_layout.tsx`), no para el ícono. Nota: hoy `splash.backgroundColor` sigue en `#ffffff`; pasar la carga inicial a azul quedó como pendiente opcional, no bloqueante.
+- El ícono solo se ve en build real, no en dev. **Verificado en APK local: el ícono se ve correcto, sin recortes.**
 
-La **fase de pruebas exhaustivas** (sección 3 arriba, 10 flujos) queda como gate final antes del build de producción.
+### Build de APK (EAS) — configurado ✅
+- `app.json`: `android.package` = `com.antuan.pos`; `extra.eas.projectId` = `4744ed42-7541-463a-92b8-4778f2171407`. Proyecto Expo: `@9ero/AntuanPOS`.
+- `eas.json`: perfil `preview` (distribución `internal`, `buildType: apk`) y `production` (`app-bundle`). `appVersionSource: local`.
+- `.easignore`: igual a `.gitignore` PERO **no ignora `.env`** — para que EAS hornee las `EXPO_PUBLIC_*` (Turso URL/token, PIN admin) en el APK. Ojo: un build **en la nube** subiría el `.env` con el token a Expo.
+- CLI no instalado global → usar `npx eas-cli ...`. Cuenta logueada: `9ero` (juan.fernadez.araya@gmail.com).
+- Comando nube: `npx eas-cli build --platform android --profile preview`. Comando local (no sube `.env`): agregar `--local` (requiere Android SDK/Java).
+- **El build se hizo LOCALMENTE** (los `build-*.apk` sin trackear son artefactos locales; `*.apk` está en `.gitignore`/`.easignore`, NO commitear). El build en la nube `d1309789` quedó `canceled` a propósito porque ya se buildeó local.
+
+### Fase de pruebas — EN CURSO (gate final antes de producción)
+**Estado actual (2026-06-30):** APK local funcionando bien en dispositivo real. Ahora vienen **varios días de pruebas** operando la app en condiciones reales para verificar que TODO funciona como debería antes del build de producción. No dar por cerrado el proyecto ni hacer cambios grandes hasta que las pruebas confirmen estabilidad — cualquier bug que aparezca en el uso diario tiene prioridad. Cubrir los 10 flujos de la sección **"3. Fase de pruebas exhaustivas"** de arriba.

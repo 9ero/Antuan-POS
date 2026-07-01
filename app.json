@@ -17,8 +17,9 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.antuan.pos",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/AntuanColor.png",
+        "foregroundImage": "./assets/adaptive-foreground.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -30,6 +31,12 @@
     "plugins": [
       "expo-router",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4744ed42-7541-463a-92b8-4778f2171407"
+      }
+    }
   }
 }

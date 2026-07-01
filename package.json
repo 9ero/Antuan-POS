@@ -1,9 +1,9 @@
 {
   "name": "antuan-pos",
   "version": "1.0.0",
-  "description": "Sistema de punto de venta (POS) móvil para pequeños negocios",
+  "description": "Punto de venta (POS) móvil offline-first para tiendas pequeñas, con respaldo en la nube (Turso)",
   "author": "Juan Miguel Fernández Araya <fernandezarayajuanmiguel@gmail.com>",
-  "license": "CC-BY-NC-SA-4.0",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "https://github.com/9ero/Antuan-POS.git"

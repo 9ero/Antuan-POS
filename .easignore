@@ -1,4 +1,7 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# Igual que .gitignore PERO incluye .env en el contexto del build, para que
+# EAS hornee las EXPO_PUBLIC_* (Turso, PIN) en el APK.
+# Para builds LOCALES el .env se queda en esta máquina.
+# OJO: con esto, un build EN LA NUBE subiría el .env (con el token) a Expo.
 
 # dependencies
 node_modules/
@@ -30,8 +33,7 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env
+# local env files — NO ignoramos .env (lo necesitamos en el build)
 .env*.local
 
 # typescript
@@ -43,4 +45,3 @@ yarn-error.*
 
 # build artifacts
 *.apk
-*.aab
