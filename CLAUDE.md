@@ -31,6 +31,12 @@ POS móvil offline-first para tienda pequeña en Costa Rica. El **comprador** (n
   ```
   Solo `isDisabled={isSubmitting}` no es suficiente — el re-render puede llegar tarde y un segundo tap escapa.
 - **El stock se gestiona EXCLUSIVAMENTE desde Inventario (recepciones/faltantes) y las ventas.** Al **editar** un producto existente, el campo Stock está **bloqueado** y `updateProduct` **no escribe** la columna `stock` — así un edit de catálogo no pisa el stock real (que pudo cambiar por una venta/recepción mientras el modal estaba abierto). Solo al **crear** un producto se define el stock inicial (vía `addProduct`).
+- **Teclado (edge-to-edge, SDK 54):** edge-to-edge es obligatorio en Android y rompe el `adjustResize` nativo en builds standalone — el teclado tapa los inputs de la mitad inferior (en Expo Go NO se nota; solo aparece en el APK). Regla para todo input nuevo:
+  - Modal RN con inputs → el contenedor raíz es `KeyboardAvoidingView behavior="padding"` (con los estilos del Box que reemplaza en `style`).
+  - Modal Gluestack con inputs → prop `avoidKeyboard`.
+  - Pantalla plana con input centrado → envolver en `KeyboardAvoidingView behavior="padding"` (setup en `_layout.tsx`, guard de admin).
+  - Formulario alto en modal → además `maxHeight` en el sheet + `ScrollView keyboardShouldPersistTaps="handled"` alrededor de los campos (ej. formulario de producto).
+  - Buscadores pegados al tope de la pantalla no lo necesitan.
 - Hacer commits solo después de que el usuario pruebe y apruebe los cambios.
 
 ## Estructura de archivos clave

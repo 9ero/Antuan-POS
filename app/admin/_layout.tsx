@@ -1,5 +1,6 @@
 import { useRouter, Stack } from 'expo-router';
 import { useState } from 'react';
+import { KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ADMIN_PIN } from '@/utils/constants';
 import {
@@ -11,7 +12,6 @@ import {
     InputField,
     VStack,
     Heading,
-    Center,
     FormControl,
     FormControlLabel,
     FormControlLabelText,
@@ -34,7 +34,7 @@ export default function AdminLayout() {
     if (!isAuthenticated) {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
-                <Center flex={1}>
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Box w="$3/4" maxWidth={400}>
                         <Heading textAlign="center" mb="$8" size="2xl">Administración</Heading>
                         <FormControl mb="$6">
@@ -60,7 +60,7 @@ export default function AdminLayout() {
                             <ButtonText>Volver</ButtonText>
                         </Button>
                     </Box>
-                </Center>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         );
     }

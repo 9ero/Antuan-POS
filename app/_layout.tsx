@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, KeyboardAvoidingView } from 'react-native';
 import {
     GluestackUIProvider, Text, Box, Button, ButtonText, VStack, HStack,
     Heading, Input, InputField, Pressable, Spinner,
@@ -105,6 +105,7 @@ export default function Layout() {
     if (needsSetup) {
         return (
             <GluestackUIProvider config={config}>
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
                 <Box flex={1} bg="$coolGray50" justifyContent="center" px="$6">
                     <VStack space="xl">
                         <VStack space="xs" alignItems="center" mb="$4">
@@ -202,6 +203,7 @@ export default function Layout() {
                         )}
                     </VStack>
                 </Box>
+                </KeyboardAvoidingView>
             </GluestackUIProvider>
         );
     }

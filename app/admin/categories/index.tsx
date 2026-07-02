@@ -1,4 +1,4 @@
-import { Modal } from 'react-native';
+import { Modal, KeyboardAvoidingView } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -142,7 +142,7 @@ export default function CategoriesAdmin() {
             </Fab>
 
             <Modal visible={modalVisible} animationType="slide" transparent>
-                <Box flex={1} justifyContent="flex-end" bg="rgba(0,0,0,0.5)">
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
                     <Box bg="$white" borderTopLeftRadius="$2xl" borderTopRightRadius="$2xl" p="$6">
                         <Heading size="lg" mb="$4">{editingId ? 'Editar categoría' : 'Nueva categoría'}</Heading>
                         <FormControl mb="$4">
@@ -164,7 +164,7 @@ export default function CategoriesAdmin() {
                             <ButtonText>Cancelar</ButtonText>
                         </Button>
                     </Box>
-                </Box>
+                </KeyboardAvoidingView>
             </Modal>
         </Box>
     );

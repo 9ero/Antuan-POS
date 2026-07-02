@@ -233,7 +233,7 @@ export default function InventoryAdmin() {
             </ScrollView>
 
             {/* Receive / Loss modal */}
-            <Modal isOpen={modalProductId !== null} onClose={() => setModalProductId(null)}>
+            <Modal isOpen={modalProductId !== null} onClose={() => setModalProductId(null)} avoidKeyboard>
                 <ModalBackdrop />
                 <ModalContent>
                     <ModalHeader>

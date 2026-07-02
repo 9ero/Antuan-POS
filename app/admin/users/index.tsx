@@ -1,4 +1,4 @@
-import { Modal, Share, StyleSheet } from 'react-native';
+import { Modal, Share, StyleSheet, KeyboardAvoidingView } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { User, CheckoutPin, getUsers, addUser, deleteUser, updateUser, getPinsWithUsers, createCheckoutPin, deleteCheckoutPin } from '@/db/queries';
@@ -267,7 +267,7 @@ export default function UsersAdmin() {
             {/* Add/Edit user modal */}
             <Modal visible={userModalVisible} animationType="slide" transparent>
                 <Box flex={1} justifyContent="flex-end" bg="$black" opacity={0.5} style={StyleSheet.absoluteFillObject} />
-                <Box flex={1} justifyContent="flex-end">
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
                     <Box bg="$white" borderTopLeftRadius="$2xl" borderTopRightRadius="$2xl" p="$6">
                         <Heading size="lg" mb="$4">{editingId ? 'Editar Usuario' : 'Nuevo Usuario'}</Heading>
                         <FormControl mb="$6">
@@ -283,12 +283,12 @@ export default function UsersAdmin() {
                             <ButtonText>Cancelar</ButtonText>
                         </Button>
                     </Box>
-                </Box>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Manual PIN modal */}
             <Modal visible={manualPinUserId !== null} animationType="fade" transparent>
-                <Box flex={1} justifyContent="center" alignItems="center" bg="rgba(0,0,0,0.5)">
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
                     <Box bg="$white" p="$6" borderRadius="$2xl" w="80%">
                         <Heading size="md" mb="$4">PIN Manual</Heading>
                         <FormControl mb="$2">
@@ -317,7 +317,7 @@ export default function UsersAdmin() {
                             <ButtonText color="$coolGray400">Cancelar</ButtonText>
                         </Button>
                     </Box>
-                </Box>
+                </KeyboardAvoidingView>
             </Modal>
         </Box>
     );

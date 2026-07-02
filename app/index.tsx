@@ -1,4 +1,4 @@
-import { Modal, StyleSheet, LayoutAnimation } from 'react-native';
+import { Modal, StyleSheet, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { Link } from 'expo-router';
 import { useState, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -421,7 +421,7 @@ export default function POSScreen() {
 
             {/* Checkout Modal: user selector + PIN */}
             <Modal visible={showCheckoutModal} animationType="slide" transparent>
-                <Box flex={1} justifyContent="flex-end" bg="rgba(0,0,0,0.5)">
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
                     <Box bg="$white" borderTopLeftRadius="$3xl" borderTopRightRadius="$3xl" p="$6" maxHeight="85%">
                         <Heading size="lg" mb="$1">Confirmar Compra</Heading>
                         <Text color="$coolGray500" mb="$4">
@@ -499,7 +499,7 @@ export default function POSScreen() {
                             <ButtonText color="$coolGray400">Cancelar</ButtonText>
                         </Button>
                     </Box>
-                </Box>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Panel lateral de categorías */}

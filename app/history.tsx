@@ -522,7 +522,7 @@ export default function HistoryScreen() {
             </Modal>
 
             {/* Clear history modal */}
-            <Modal isOpen={showClearModal} onClose={() => setShowClearModal(false)}>
+            <Modal isOpen={showClearModal} onClose={() => setShowClearModal(false)} avoidKeyboard>
                 <ModalBackdrop />
                 <ModalContent>
                     <ModalHeader>

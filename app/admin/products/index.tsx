@@ -1,4 +1,4 @@
-import { Modal, StyleSheet } from 'react-native';
+import { Modal, StyleSheet, KeyboardAvoidingView } from 'react-native';
 import { Stack } from 'expo-router';
 import { useState, useCallback, useMemo } from 'react';
 import { Product, Category, getProducts, getAllCategories, addProduct, deleteProduct, updateProduct } from '@/db/queries';
@@ -242,10 +242,11 @@ export default function ProductsAdmin() {
             {/* Add/Edit Product Modal */}
             <Modal visible={modalVisible} animationType="slide" transparent>
                 <Box flex={1} justifyContent="flex-end" bg="$black" opacity={0.5} style={StyleSheet.absoluteFillObject} />
-                <Box flex={1} justifyContent="flex-end">
-                    <Box bg="$white" borderTopLeftRadius="$2xl" borderTopRightRadius="$2xl" p="$6">
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
+                    <Box bg="$white" borderTopLeftRadius="$2xl" borderTopRightRadius="$2xl" p="$6" maxHeight="90%">
                         <Heading size="lg" mb="$4">{editingId ? 'Editar Producto' : 'Nuevo Producto'}</Heading>
 
+                        <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} keyboardShouldPersistTaps="handled">
                         <VStack space="md" mb="$6">
                             <FormControl>
                                 <FormControlLabel><FormControlLabelText>Nombre</FormControlLabelText></FormControlLabel>
@@ -378,6 +379,7 @@ export default function ProductsAdmin() {
                                 )}
                             </FormControl>
                         </VStack>
+                        </ScrollView>
 
                         <Button onPress={handleAdd} size="lg" mb="$2" isDisabled={isSubmitting}>
                             <ButtonText>{isSubmitting ? 'Guardando...' : 'Guardar'}</ButtonText>
@@ -386,7 +388,7 @@ export default function ProductsAdmin() {
                             <ButtonText>Cancelar</ButtonText>
                         </Button>
                     </Box>
-                </Box>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Error Modal */}
