@@ -1,6 +1,6 @@
 import { Modal, StyleSheet, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { Link } from 'expo-router';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,14 +53,21 @@ export default function POSScreen() {
 
     // Navegación por categorías. Por defecto sin filtro: muestra todos los productos.
     const [activeFilter, setActiveFilter] = useState<Filter>(ALL);
-    const [showCategoryPanel, setShowCategoryPanel] = useState(false);
 
-    // Carrito expandible: tap en "Carrito" lo escala a media pantalla y vuelve
+    const animateLayout = () => LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+    // Carrito: comprimido del todo con 0 ítems (solo barra + total + Cobrar),
+    // tamaño normal con 1+, y tap en "Carrito" lo escala a media pantalla y vuelve
+    const cartEmpty = cart.length === 0;
     const [cartExpanded, setCartExpanded] = useState(false);
     const toggleCart = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        if (cartEmpty) return;
+        animateLayout();
         setCartExpanded(v => !v);
     };
+    useEffect(() => {
+        if (cartEmpty) setCartExpanded(false);
+    }, [cartEmpty]);
 
     const isArtesanal = (p: Product) => !p.barcode || p.barcode.trim() === '';
 
@@ -75,6 +82,18 @@ export default function POSScreen() {
         ? (categories.find(c => c.id === activeFilter)?.name ?? '')
         : '';
 
+    // Chips de filtro: Artesanales + categorías activas. Solo se muestran las que tienen productos.
+    const filterChips = useMemo(() => {
+        const chips: { key: Filter; label: string; count: number }[] = [];
+        const artesanalCount = products.filter(isArtesanal).length;
+        if (artesanalCount > 0) chips.push({ key: ARTESANAL, label: 'Artesanales', count: artesanalCount });
+        categories.forEach(cat => {
+            const count = products.filter(p => p.category_id === cat.id).length;
+            if (count > 0) chips.push({ key: cat.id!, label: cat.name, count });
+        });
+        return chips;
+    }, [products, categories]);
+
     // Checkout modal state
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
     const [modalUser, setModalUser] = useState<User | null>(null);
@@ -82,6 +101,15 @@ export default function POSScreen() {
     const [checkoutPin, setCheckoutPin] = useState('');
     const [pinError, setPinError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Aviso de venta exitosa: tarjeta centrada que desaparece sola (reemplaza al toast superior)
+    const [saleSuccess, setSaleSuccess] = useState<number | null>(null);
+    const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const showSaleSuccess = (total: number) => {
+        if (successTimer.current) clearTimeout(successTimer.current);
+        setSaleSuccess(total);
+        successTimer.current = setTimeout(() => setSaleSuccess(null), 2000);
+    };
 
     const normalize = (s: string) =>
         s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -128,6 +156,7 @@ export default function POSScreen() {
     const confirmScannedProduct = () => {
         if (!scannedProduct) return;
         try {
+            animateLayout();
             addToCart(scannedProduct);
             toast.show({
                 placement: 'top',
@@ -193,14 +222,8 @@ export default function POSScreen() {
                 }
             }
             if (result.success) {
-                toast.show({
-                    placement: 'top',
-                    render: ({ id }) => (
-                        <Toast nativeID={'toast-' + id} action="success" variant="solid">
-                            <ToastTitle>¡Venta Exitosa!</ToastTitle>
-                        </Toast>
-                    ),
-                });
+                showSaleSuccess(cartTotal);
+                animateLayout();
                 clearCart();
                 refresh();
             } else {
@@ -224,7 +247,7 @@ export default function POSScreen() {
             <Box flex={1} flexDirection="column">
 
                 {/* TOP: Products */}
-                <Box flex={cartExpanded ? 1 : 2} p="$4">
+                <Box flex={cartEmpty || cartExpanded ? 1 : 2} p="$4">
                     <HStack justifyContent="space-between" mb="$4" alignItems="center">
                         <Heading size="xl" color="$blue600">Antuan POS</Heading>
                         <HStack space="md">
@@ -241,46 +264,36 @@ export default function POSScreen() {
                         </HStack>
                     </HStack>
 
-                    {/* Navegación por categorías (sin filtro por defecto = Todos) */}
-                    <VStack space="xs" mb="$3">
-                        <Text size="sm" fontWeight="$semibold" color="$coolGray500">Categorías</Text>
-                        <HStack space="sm" alignItems="center" flexWrap="wrap">
-                            <Pressable
-                                onPress={() => setActiveFilter(ALL)}
-                                bg={activeFilter === ALL ? '$blue600' : '$coolGray100'}
-                                borderRadius="$full" px="$4" py="$2"
-                            >
-                                <Text fontWeight="$semibold" color={activeFilter === ALL ? '$white' : '$coolGray700'}>
-                                    Todos
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                onPress={() => setActiveFilter(ARTESANAL)}
-                                bg={activeFilter === ARTESANAL ? '$blue600' : '$coolGray100'}
-                                borderRadius="$full" px="$4" py="$2"
-                            >
-                                <Text fontWeight="$semibold" color={activeFilter === ARTESANAL ? '$white' : '$coolGray700'}>
-                                    Artesanales
-                                </Text>
-                            </Pressable>
-
-                            {typeof activeFilter === 'number' && (
-                                <Box bg="$blue600" borderRadius="$full" px="$4" py="$2">
-                                    <Text fontWeight="$semibold" color="$white">{activeCategoryName}</Text>
-                                </Box>
-                            )}
-
-                            {categories.length > 0 && (
-                                <Pressable
-                                    onPress={() => setShowCategoryPanel(true)}
-                                    borderWidth={1} borderColor="$coolGray300" borderRadius="$full" px="$4" py="$2"
-                                >
-                                    <Text color="$coolGray700">Mostrar más ▸</Text>
-                                </Pressable>
-                            )}
-                        </HStack>
-                    </VStack>
+                    {/* Filtros por categoría: una sola fila con scroll horizontal.
+                        Tap filtra; tap en el chip activo lo desactiva y vuelve a mostrar todo. */}
+                    {filterChips.length > 0 && (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} mb="$3">
+                            <HStack space="sm" alignItems="center">
+                                {filterChips.map(chip => {
+                                    const active = activeFilter === chip.key;
+                                    return (
+                                        <Pressable
+                                            key={String(chip.key)}
+                                            onPress={() => setActiveFilter(active ? ALL : chip.key)}
+                                            bg={active ? '$blue600' : '$coolGray100'}
+                                            borderRadius="$full" px="$4" py="$2"
+                                        >
+                                            <HStack space="xs" alignItems="center">
+                                                <Text fontWeight="$semibold" color={active ? '$white' : '$coolGray700'}>
+                                                    {chip.label}
+                                                </Text>
+                                                <Text size="xs" color={active ? '$blue200' : '$coolGray400'}>
+                                                    {chip.count}
+                                                </Text>
+                                                {/* ✕ = "tocá para quitar el filtro" */}
+                                                {active && <Ionicons name="close" size={13} color="white" />}
+                                            </HStack>
+                                        </Pressable>
+                                    );
+                                })}
+                            </HStack>
+                        </ScrollView>
+                    )}
 
                     <ScrollView flex={1}>
                         <Box flexDirection="row" flexWrap="wrap" gap="$3" pb="$4">
@@ -305,7 +318,7 @@ export default function POSScreen() {
                                         disabled={outOfStock}
                                         opacity={outOfStock ? 0.5 : 1}
                                         onPress={() => {
-                                            try { addToCart(product); }
+                                            try { animateLayout(); addToCart(product); }
                                             catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
                                         }}
                                     >
@@ -343,9 +356,9 @@ export default function POSScreen() {
                     </ScrollView>
                 </Box>
 
-                {/* BOTTOM: Cart */}
+                {/* BOTTOM: Cart — flex 0 (alto de contenido) con carrito vacío */}
                 <Box
-                    flex={1} bg="$white" p="$4"
+                    flex={cartEmpty ? 0 : 1} bg="$white" p="$4"
                     borderTopWidth={1} borderColor="$coolGray200"
                     shadowColor="$black" shadowOffset={{ width: 0, height: -2 }}
                     shadowOpacity={0.1} shadowRadius={4} elevation={10}
@@ -374,32 +387,36 @@ export default function POSScreen() {
                             <Heading size="md">
                                 Carrito ({cart.reduce((a, b) => a + b.quantity, 0)})
                             </Heading>
-                            {/* @ts-ignore */}
-                            <Icon as={Ionicons} name={cartExpanded ? 'chevron-down' : 'chevron-up'} color="$coolGray400" />
+                            {!cartEmpty && (
+                                // @ts-ignore
+                                <Icon as={Ionicons} name={cartExpanded ? 'chevron-down' : 'chevron-up'} color="$coolGray400" />
+                            )}
                         </HStack>
                     </Pressable>
 
-                    <ScrollView flex={1}>
-                        <VStack space="sm">
-                            {cart.map(item => (
-                                <HStack key={item.id} justifyContent="space-between" alignItems="center" p="$2" borderBottomWidth={1} borderColor="$coolGray100">
-                                    <VStack flex={1}>
-                                        <Text fontWeight="bold">{item.name}</Text>
-                                        <Text size="sm" color="$coolGray500">₡{item.price} x {item.quantity}</Text>
-                                    </VStack>
-                                    <HStack alignItems="center" space="sm">
-                                        <Pressable onPress={() => updateQuantity(item.id!, -1)}>
-                                            <Icon as={RemoveIcon} color="$coolGray500" />
-                                        </Pressable>
-                                        <Text fontWeight="bold">{item.quantity}</Text>
-                                        <Pressable onPress={() => updateQuantity(item.id!, 1)}>
-                                            <Icon as={AddIcon} color="$coolGray500" />
-                                        </Pressable>
+                    {!cartEmpty && (
+                        <ScrollView flex={1}>
+                            <VStack space="sm">
+                                {cart.map(item => (
+                                    <HStack key={item.id} justifyContent="space-between" alignItems="center" p="$2" borderBottomWidth={1} borderColor="$coolGray100">
+                                        <VStack flex={1}>
+                                            <Text fontWeight="bold">{item.name}</Text>
+                                            <Text size="sm" color="$coolGray500">₡{item.price} x {item.quantity}</Text>
+                                        </VStack>
+                                        <HStack alignItems="center" space="sm">
+                                            <Pressable onPress={() => { animateLayout(); updateQuantity(item.id!, -1); }}>
+                                                <Icon as={RemoveIcon} color="$coolGray500" />
+                                            </Pressable>
+                                            <Text fontWeight="bold">{item.quantity}</Text>
+                                            <Pressable onPress={() => { animateLayout(); updateQuantity(item.id!, 1); }}>
+                                                <Icon as={AddIcon} color="$coolGray500" />
+                                            </Pressable>
+                                        </HStack>
                                     </HStack>
-                                </HStack>
-                            ))}
-                        </VStack>
-                    </ScrollView>
+                                ))}
+                            </VStack>
+                        </ScrollView>
+                    )}
 
                     <Divider my="$2" />
 
@@ -419,17 +436,41 @@ export default function POSScreen() {
                 </Box>
             </Box>
 
+            {/* Venta exitosa: tarjeta centrada, no bloquea taps y desaparece sola */}
+            {saleSuccess !== null && (
+                <Box
+                    position="absolute" top={0} left={0} right={0} bottom={0}
+                    justifyContent="center" alignItems="center"
+                    zIndex={50} pointerEvents="none"
+                >
+                    <Box
+                        bg="$white" borderRadius="$2xl" px="$10" py="$8" alignItems="center"
+                        shadowColor="$black" shadowOffset={{ width: 0, height: 4 }}
+                        shadowOpacity={0.25} shadowRadius={12} elevation={12}
+                    >
+                        <Box
+                            w="$16" h="$16" bg="$emerald100" borderRadius="$full"
+                            alignItems="center" justifyContent="center" mb="$3"
+                        >
+                            <Ionicons name="checkmark" size={44} color="#059669" />
+                        </Box>
+                        <Heading size="xl" color="$emerald700">¡Venta Exitosa!</Heading>
+                        <Text size="lg" color="$coolGray500" mt="$1">₡{saleSuccess}</Text>
+                    </Box>
+                </Box>
+            )}
+
             {/* Checkout Modal: user selector + PIN */}
-            <Modal visible={showCheckoutModal} animationType="slide" transparent>
-                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <Box bg="$white" borderTopLeftRadius="$3xl" borderTopRightRadius="$3xl" p="$6" maxHeight="85%">
+            <Modal visible={showCheckoutModal} animationType="fade" transparent>
+                <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 20 }}>
+                    <Box bg="$white" borderRadius="$3xl" p="$6" maxHeight="85%">
                         <Heading size="lg" mb="$1">Confirmar Compra</Heading>
                         <Text color="$coolGray500" mb="$4">
                             Total: <Text fontWeight="$bold" color="$emerald700" size="lg">₡{cartTotal}</Text>
                         </Text>
 
                         {/* User selector */}
-                        <Text size="sm" fontWeight="$semibold" mb="$2">¿Quién eres?</Text>
+                        <Text size="sm" fontWeight="$semibold" mb="$2">Nombre del cliente</Text>
                         {modalUser ? (
                             <HStack
                                 bg="$blue50" borderRadius="$lg" borderWidth={1} borderColor="$blue200"
@@ -500,69 +541,6 @@ export default function POSScreen() {
                         </Button>
                     </Box>
                 </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Panel lateral de categorías */}
-            <Modal visible={showCategoryPanel} animationType="fade" transparent onRequestClose={() => setShowCategoryPanel(false)}>
-                <HStack flex={1}>
-                    <Box
-                        w="78%" bg="$white" h="100%" p="$5"
-                        shadowColor="$black" shadowOffset={{ width: 2, height: 0 }}
-                        shadowOpacity={0.2} shadowRadius={6} elevation={12}
-                    >
-                        <Heading size="lg" mb="$4">Categorías</Heading>
-                        <ScrollView>
-                            <VStack space="sm">
-                                <Pressable
-                                    onPress={() => { setActiveFilter(ALL); setShowCategoryPanel(false); }}
-                                    bg={activeFilter === ALL ? '$blue50' : '$coolGray50'}
-                                    borderWidth={1} borderColor={activeFilter === ALL ? '$blue300' : '$coolGray200'}
-                                    borderRadius="$lg" px="$4" py="$3"
-                                >
-                                    <HStack justifyContent="space-between" alignItems="center">
-                                        <Text fontWeight="$bold" color="$coolGray800">Todos</Text>
-                                        <Text size="sm" color="$coolGray500">{products.length}</Text>
-                                    </HStack>
-                                </Pressable>
-
-                                <Pressable
-                                    onPress={() => { setActiveFilter(ARTESANAL); setShowCategoryPanel(false); }}
-                                    bg={activeFilter === ARTESANAL ? '$blue50' : '$coolGray50'}
-                                    borderWidth={1} borderColor={activeFilter === ARTESANAL ? '$blue300' : '$coolGray200'}
-                                    borderRadius="$lg" px="$4" py="$3"
-                                >
-                                    <HStack justifyContent="space-between" alignItems="center">
-                                        <VStack>
-                                            <Text fontWeight="$bold" color="$coolGray800">Artesanales</Text>
-                                            <Text size="xs" color="$coolGray500">Sin código de barras</Text>
-                                        </VStack>
-                                        <Text size="sm" color="$coolGray500">{products.filter(isArtesanal).length}</Text>
-                                    </HStack>
-                                </Pressable>
-
-                                {categories.map(cat => {
-                                    const count = products.filter(p => p.category_id === cat.id).length;
-                                    const active = activeFilter === cat.id;
-                                    return (
-                                        <Pressable
-                                            key={cat.id}
-                                            onPress={() => { setActiveFilter(cat.id!); setShowCategoryPanel(false); }}
-                                            bg={active ? '$blue50' : '$coolGray50'}
-                                            borderWidth={1} borderColor={active ? '$blue300' : '$coolGray200'}
-                                            borderRadius="$lg" px="$4" py="$3"
-                                        >
-                                            <HStack justifyContent="space-between" alignItems="center">
-                                                <Text fontWeight="$semibold" color="$coolGray800">{cat.name}</Text>
-                                                <Text size="sm" color="$coolGray500">{count}</Text>
-                                            </HStack>
-                                        </Pressable>
-                                    );
-                                })}
-                            </VStack>
-                        </ScrollView>
-                    </Box>
-                    <Pressable flex={1} bg="rgba(0,0,0,0.5)" onPress={() => setShowCategoryPanel(false)} />
-                </HStack>
             </Modal>
 
             {/* Camera Modal */}

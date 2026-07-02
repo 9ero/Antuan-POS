@@ -205,8 +205,10 @@ Paleta aplicada de forma consistente (regla 60% neutro / 30% azul / 10% acento).
 Tokens `$emerald`/`$amber` existen en `@gluestack-ui/config`. Ya no se usa `$purple`/`$green`/`$orange` en `app/`.
 
 ### Interacciones del POS (`app/index.tsx`)
-- **Botón "Escanear"** (antes "Escanear Producto"): elemento **flotante** (absolute, `pointerEvents="box-none"`), centrado y anclado al tope del panel del carrito con sombra — no ocupa fila en el layout y sigue al carrito aunque se expanda. `translateY: -24` ajusta la altura del flote.
-- **Carrito expandible**: tap en el título "Carrito" escala el panel a media pantalla (top `flex 2→1`) y vuelve, con `LayoutAnimation`. Chevron ▲/▼ indica el estado.
+- **Botón "Escanear"** (antes "Escanear Producto"): elemento **flotante** (absolute, `pointerEvents="box-none"`), centrado y anclado al tope del panel del carrito con sombra — no ocupa fila en el layout y sigue al carrito aunque se expanda o comprima. `translateY` ajusta la altura del flote.
+- **Carrito con 3 estados**: vacío → **comprimido del todo** (`flex 0`, solo barra "Carrito (0)" + Total + Cobrar, sin chevron, tap no expande); con 1+ ítems → tamaño normal (top `flex 2` / carrito `flex 1`); tap en "Carrito" → media pantalla (`flex 1/1`) y vuelve. Todas las mutaciones del carrito llaman `animateLayout()` (`LayoutAnimation`) para transiciones suaves; `useEffect` resetea `cartExpanded` al vaciarse.
+- **Venta exitosa**: tarjeta **centrada** (círculo emerald con ✓ + "¡Venta Exitosa!" + monto), `pointerEvents="none"`, se cierra sola a los 2 s (timer con `useRef` que se resetea si hay otra venta). Reemplazó al toast superior; los toasts de error/escáner siguen.
+- **Modal de checkout centrado** (fade, esquinas `$3xl`, `paddingHorizontal`), label "Nombre del cliente" para el selector de usuario.
 - **"Cerrar Escáner"** (modal de cámara): botón outline transparente con borde blanco + ícono ✕, cuadrado (`borderRadius="$md"`), para no tapar la cámara.
 
 ### 1. Limpieza técnica ✅
@@ -217,9 +219,8 @@ Tokens `$emerald`/`$amber` existen en `@gluestack-ui/config`. Ya no se usa `$pur
 - **Categoría obligatoria** al crear/editar producto (selector de categorías activas en `admin/products`, sin texto libre). Validación: no se guarda sin categoría.
 - **Panel admin** `app/admin/categories/`: crear, renombrar, activar/desactivar. Desactivar no toca los productos ya asignados, solo la oculta del selector y de los filtros. Sync en tiempo real (`pushCategoryToTurso`) + push/restore completo.
 - **Artesanales** = categoría derivada (no almacenada): productos **sin código de barras** (`isArtesanal` = barcode vacío). Son los que no se pueden escanear.
-- POS (`app/index.tsx`): el escáner sigue arriba como camino primario. Filtros: **Todos** (default, sin filtro → muestra todo como antes), *Artesanales*, y "Mostrar más ▸" → panel lateral con Todos + Artesanales + cada categoría activa con su conteo. Seleccionar filtra la grilla (`visibleProducts` por `category_id`, client-side). Categorías cargadas en `useProductSearch`.
+- POS (`app/index.tsx`): el escáner sigue arriba como camino primario. Filtros en **una sola fila con scroll horizontal** (`filterChips`): Artesanales + cada categoría activa, cada chip con **nombre + conteo**; las de 0 productos no aparecen y **no hay chip "Todos"** — tap filtra, tap en el chip activo (marcado con ✕) lo desactiva y vuelve a mostrar todo (default sin filtro). Filtra la grilla (`visibleProducts` por `category_id`, client-side). Categorías cargadas en `useProductSearch`. Un producto artesanal con categoría aparece en **ambos** filtros (Artesanales es derivada del barcode, no excluyente). El panel lateral y "Mostrar más" fueron eliminados.
 - Admin de productos: la lista muestra el **nombre de la categoría** (resuelto con `getAllCategories`, incluso si está inactiva) en vez del código; Stock y Código de Barras en líneas separadas; **búsqueda rápida** por nombre (accent-insensitive) o código de barras.
-- Nota: la animación del panel es `fade` (anchored-left); el slide izq→der queda para el pulido visual (Feature 8).
 
 ### 3. Fase de pruebas exhaustivas (alta)
 Flujos a cubrir antes de build de producción:
