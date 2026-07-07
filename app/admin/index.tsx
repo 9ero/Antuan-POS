@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
@@ -43,8 +43,11 @@ export default function AdminDashboard() {
         s ? new Date(s).toLocaleString('es-CR') : 'Nunca';
 
     return (
-        <SafeAreaView className="flex-1 bg-gray-50 p-6">
+        <SafeAreaView className="flex-1 bg-gray-50">
             <Stack.Screen options={{ headerShown: false }} />
+            {/* paddingBottom extra: con edge-to-edge "Salir de Admin" quedaba pegado
+                a la barra de navegación de Android */}
+            <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 48 }}>
             <Text className="text-3xl font-bold text-gray-800 mb-2">Panel de Admin</Text>
             {deviceName && (
                 <Text className="text-sm text-gray-400 mb-6">{deviceName}</Text>
@@ -174,6 +177,7 @@ export default function AdminDashboard() {
                     </TouchableOpacity>
                 )}
             </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }

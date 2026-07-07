@@ -1,4 +1,5 @@
 import { Modal, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useState, useCallback, useMemo } from 'react';
 import { Product, Category, getProducts, getAllCategories, addProduct, deleteProduct, updateProduct } from '@/db/queries';
@@ -44,6 +45,7 @@ const normalize = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export default function ProductsAdmin() {
+    const insets = useSafeAreaInsets();
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [search, setSearch] = useState('');
@@ -188,7 +190,7 @@ export default function ProductsAdmin() {
                 </Input>
             </Box>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8 }}>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 100 }}>
                 <VStack space="md">
                     {filteredProducts.length === 0 && (
                         <Box alignItems="center" py="$8">
@@ -227,9 +229,12 @@ export default function ProductsAdmin() {
                 </VStack>
             </ScrollView>
 
+            {/* bottom con inset: la pantalla no tiene SafeAreaView y con edge-to-edge
+                el FAB quedaba sobre la barra de navegación de Android */}
             <Fab
                 size="lg"
                 placement="bottom right"
+                bottom={insets.bottom + 24}
                 isHovered={false}
                 isDisabled={false}
                 isPressed={false}
@@ -379,14 +384,16 @@ export default function ProductsAdmin() {
                                 )}
                             </FormControl>
                         </VStack>
-                        </ScrollView>
 
+                        {/* Botones dentro del ScrollView: si estuvieran pegados al fondo del
+                            sheet, el KeyboardAvoidingView los deja flotando sobre el teclado. */}
                         <Button onPress={handleAdd} size="lg" mb="$2" isDisabled={isSubmitting}>
                             <ButtonText>{isSubmitting ? 'Guardando...' : 'Guardar'}</ButtonText>
                         </Button>
                         <Button onPress={closeModal} variant="link" size="sm">
                             <ButtonText>Cancelar</ButtonText>
                         </Button>
+                        </ScrollView>
                     </Box>
                 </KeyboardAvoidingView>
             </Modal>

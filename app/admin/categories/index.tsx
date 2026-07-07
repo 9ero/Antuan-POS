@@ -1,4 +1,5 @@
 import { Modal, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -30,6 +31,7 @@ import {
 } from '@gluestack-ui/themed';
 
 export default function CategoriesAdmin() {
+    const insets = useSafeAreaInsets();
     const [categories, setCategories] = useState<Category[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [name, setName] = useState('');
@@ -91,7 +93,7 @@ export default function CategoriesAdmin() {
         <Box flex={1} bg="$coolGray50">
             <Stack.Screen options={{ title: 'Categorías', headerShown: true }} />
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
                 <Text size="sm" color="$coolGray500" mb="$3">
                     Las categorías desactivadas no aparecen al crear productos ni como filtro en el POS,
                     pero los productos ya asignados las conservan.
@@ -137,7 +139,9 @@ export default function CategoriesAdmin() {
                 </VStack>
             </ScrollView>
 
-            <Fab size="lg" placement="bottom right" onPress={openAdd} bg="$blue600">
+            {/* bottom con inset: la pantalla no tiene SafeAreaView y con edge-to-edge
+                el FAB quedaba sobre la barra de navegación de Android */}
+            <Fab size="lg" placement="bottom right" bottom={insets.bottom + 24} onPress={openAdd} bg="$blue600">
                 <FabIcon as={AddIcon} />
             </Fab>
 

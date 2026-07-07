@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Product, StockMovement, getProducts, addStock, registerLoss, getStockMovements } from '@/db/queries';
 import { isConfigured } from '@/db/turso';
@@ -42,8 +42,12 @@ const REASON_LABELS: Record<string, string> = {
 
 type ModalMode = 'recepcion' | 'extravio';
 
+const normalize = (s: string) =>
+    s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
 export default function InventoryAdmin() {
     const [products, setProducts] = useState<Product[]>([]);
+    const [search, setSearch] = useState('');
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [movements, setMovements] = useState<StockMovement[]>([]);
     const [loadingMovements, setLoadingMovements] = useState(false);
@@ -67,6 +71,14 @@ export default function InventoryAdmin() {
     };
 
     useFocusEffect(useCallback(() => { loadProducts(); }, []));
+
+    const filteredProducts = useMemo(() => {
+        const q = normalize(search.trim());
+        if (!q) return products;
+        return products.filter(p =>
+            normalize(p.name).includes(q) || (p.barcode || '').toLowerCase().includes(q)
+        );
+    }, [products, search]);
 
     const toggleHistory = async (productId: number) => {
         if (expandedId === productId) {
@@ -127,9 +139,27 @@ export default function InventoryAdmin() {
         <Box flex={1} bg="$coolGray50">
             <Stack.Screen options={{ title: 'Inventario', headerShown: true }} />
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <Box px="$4" pt="$3" pb="$1">
+                <Input bg="$white">
+                    <InputField
+                        placeholder="Buscar por nombre o código…"
+                        value={search}
+                        onChangeText={setSearch}
+                        autoCapitalize="none"
+                    />
+                </Input>
+            </Box>
+
+            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8 }}>
                 <VStack space="md">
-                    {products.map(product => {
+                    {filteredProducts.length === 0 && (
+                        <Box alignItems="center" py="$8">
+                            <Text color="$coolGray400">
+                                {search.trim() ? 'Sin resultados' : 'No hay productos'}
+                            </Text>
+                        </Box>
+                    )}
+                    {filteredProducts.map(product => {
                         const isLow = product.stock <= LOW_STOCK;
                         const isExpanded = expandedId === product.id;
 
