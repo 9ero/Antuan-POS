@@ -4,24 +4,30 @@ import { Product, CartItem } from '@/db/schemas';
 export const useCart = () => {
     const [cart, setCart] = useState<CartItem[]>([]);
 
-    const addToCart = (product: Product, quantityToAdd: number = 1) => {
+    // Devuelve false si no hay stock suficiente. NUNCA lanzar desde el updater de
+    // setCart: React puede ejecutarlo durante el render (fuera del try/catch del
+    // onPress) y un throw ahí tumba la app en el APK.
+    const addToCart = (product: Product, quantityToAdd: number = 1): boolean => {
+        const existing = cart.find(item => item.id === product.id);
+        const currentQty = existing ? existing.quantity : 0;
+        if (currentQty + quantityToAdd > product.stock) {
+            return false;
+        }
+
         setCart(prev => {
-            const existing = prev.find(item => item.id === product.id);
-
-            // Validate stock
-            const currentQty = existing ? existing.quantity : 0;
-            if (currentQty + quantityToAdd > product.stock) {
-                // Improve this: return error or handle it UI side. 
-                // For now, we will handle in UI or simple Alert? 
-                // Best to throw and catch in UI
-                throw new Error(`Solo hay ${product.stock} unidades disponibles de ${product.name}`);
+            const prevItem = prev.find(item => item.id === product.id);
+            const prevQty = prevItem ? prevItem.quantity : 0;
+            // Re-chequeo dentro del updater: taps muy rápidos en el mismo batch
+            // ven un `cart` desactualizado arriba; aquí se clampa sin romper.
+            if (prevQty + quantityToAdd > product.stock) {
+                return prev;
             }
-
-            if (existing) {
+            if (prevItem) {
                 return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + quantityToAdd } : item);
             }
             return [...prev, { ...product, quantity: quantityToAdd }];
         });
+        return true;
     };
 
     const updateQuantity = (productId: number, delta: number) => {

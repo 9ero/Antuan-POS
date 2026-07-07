@@ -35,6 +35,7 @@ import { createTransaction, validatePin, getPinForUser } from '@/db/queries';
 import { User, Product } from '@/db/schemas';
 import { isConfigured } from '@/db/turso';
 import { getDeviceConfig, pushTransactionToTurso } from '@/db/sync';
+import { categoryColors, ARTESANAL_COLOR, productColor, isArtesanal, ColorPair } from '@/utils/categoryColor';
 
 // Filtros del POS. ALL = sin filtro (todos los productos, comportamiento original).
 // ARTESANAL = categoría derivada: productos sin código de barras (no se pueden escanear).
@@ -57,7 +58,7 @@ export default function POSScreen() {
     const animateLayout = () => LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
     // Carrito: comprimido del todo con 0 ítems (solo barra + total + Cobrar),
-    // tamaño normal con 1+, y tap en "Carrito" lo escala a media pantalla y vuelve
+    // ~1/4 de pantalla por defecto con 1+ ítems, y tap en "Carrito" lo expande a ~3/4 y vuelve
     const cartEmpty = cart.length === 0;
     const [cartExpanded, setCartExpanded] = useState(false);
     const toggleCart = () => {
@@ -69,14 +70,19 @@ export default function POSScreen() {
         if (cartEmpty) setCartExpanded(false);
     }, [cartEmpty]);
 
-    const isArtesanal = (p: Product) => !p.barcode || p.barcode.trim() === '';
+    const topFlex = cartEmpty ? 1 : cartExpanded ? 1 : 3;
+    const bottomFlex = cartEmpty ? 0 : cartExpanded ? 3 : 1;
+
+    // Productos sin stock no se muestran: el comprador no puede venderlos igual,
+    // así que ni la grilla ni los conteos de los chips los cuentan.
+    const inStockProducts = useMemo(() => products.filter(p => p.stock > 0), [products]);
 
     // Productos visibles en la grilla según el filtro activo
     const visibleProducts = useMemo(() => {
-        if (activeFilter === ALL) return products;
-        if (activeFilter === ARTESANAL) return products.filter(isArtesanal);
-        return products.filter(p => p.category_id === activeFilter);
-    }, [products, activeFilter]);
+        if (activeFilter === ALL) return inStockProducts;
+        if (activeFilter === ARTESANAL) return inStockProducts.filter(isArtesanal);
+        return inStockProducts.filter(p => p.category_id === activeFilter);
+    }, [inStockProducts, activeFilter]);
 
     const activeCategoryName = typeof activeFilter === 'number'
         ? (categories.find(c => c.id === activeFilter)?.name ?? '')
@@ -84,15 +90,15 @@ export default function POSScreen() {
 
     // Chips de filtro: Artesanales + categorías activas. Solo se muestran las que tienen productos.
     const filterChips = useMemo(() => {
-        const chips: { key: Filter; label: string; count: number }[] = [];
-        const artesanalCount = products.filter(isArtesanal).length;
-        if (artesanalCount > 0) chips.push({ key: ARTESANAL, label: 'Artesanales', count: artesanalCount });
+        const chips: { key: Filter; label: string; count: number; colors: ColorPair }[] = [];
+        const artesanalCount = inStockProducts.filter(isArtesanal).length;
+        if (artesanalCount > 0) chips.push({ key: ARTESANAL, label: 'Artesanales', count: artesanalCount, colors: ARTESANAL_COLOR });
         categories.forEach(cat => {
-            const count = products.filter(p => p.category_id === cat.id).length;
-            if (count > 0) chips.push({ key: cat.id!, label: cat.name, count });
+            const count = inStockProducts.filter(p => p.category_id === cat.id).length;
+            if (count > 0) chips.push({ key: cat.id!, label: cat.name, count, colors: categoryColors(cat.id!) });
         });
         return chips;
-    }, [products, categories]);
+    }, [inStockProducts, categories]);
 
     // Checkout modal state
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
@@ -155,9 +161,8 @@ export default function POSScreen() {
 
     const confirmScannedProduct = () => {
         if (!scannedProduct) return;
-        try {
-            animateLayout();
-            addToCart(scannedProduct);
+        animateLayout();
+        if (addToCart(scannedProduct)) {
             toast.show({
                 placement: 'top',
                 render: ({ id }) => (
@@ -169,14 +174,14 @@ export default function POSScreen() {
                     </Toast>
                 ),
             });
-        } catch (e) {
+        } else {
             toast.show({
                 placement: 'top',
                 render: ({ id }) => (
                     <Toast nativeID={'toast-' + id} action="error" variant="solid">
                         <VStack space="xs">
                             <ToastTitle>Error</ToastTitle>
-                            <ToastDescription>{e instanceof Error ? e.message : 'Stock insuficiente'}</ToastDescription>
+                            <ToastDescription>{`Solo hay ${scannedProduct.stock} unidades disponibles de ${scannedProduct.name}`}</ToastDescription>
                         </VStack>
                     </Toast>
                 ),
@@ -225,6 +230,7 @@ export default function POSScreen() {
                 showSaleSuccess(cartTotal);
                 animateLayout();
                 clearCart();
+                setActiveFilter(ALL);
                 refresh();
             } else {
                 toast.show({
@@ -243,11 +249,12 @@ export default function POSScreen() {
     };
 
     return (
+        <Box flex={1} bg="$black">
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
             <Box flex={1} flexDirection="column">
 
                 {/* TOP: Products */}
-                <Box flex={cartEmpty || cartExpanded ? 1 : 2} p="$4">
+                <Box flex={topFlex} p="$4">
                     <HStack justifyContent="space-between" mb="$4" alignItems="center">
                         <Heading size="xl" color="$blue600">Antuan POS</Heading>
                         <HStack space="md">
@@ -275,18 +282,25 @@ export default function POSScreen() {
                                         <Pressable
                                             key={String(chip.key)}
                                             onPress={() => setActiveFilter(active ? ALL : chip.key)}
-                                            bg={active ? '$blue600' : '$coolGray100'}
+                                            style={{
+                                                backgroundColor: chip.colors.bg,
+                                                borderWidth: active ? 2 : 1,
+                                                borderColor: chip.colors.border,
+                                            }}
                                             borderRadius="$full" px="$4" py="$2"
                                         >
                                             <HStack space="xs" alignItems="center">
-                                                <Text fontWeight="$semibold" color={active ? '$white' : '$coolGray700'}>
+                                                {/* Texto siempre oscuro: el fondo es pastel casi
+                                                    blanco en ambos estados, no hace falta decidir
+                                                    blanco/negro por contraste */}
+                                                <Text fontWeight="$semibold" color="$coolGray800">
                                                     {chip.label}
                                                 </Text>
-                                                <Text size="xs" color={active ? '$blue200' : '$coolGray400'}>
+                                                <Text size="xs" color="$coolGray500">
                                                     {chip.count}
                                                 </Text>
                                                 {/* ✕ = "tocá para quitar el filtro" */}
-                                                {active && <Ionicons name="close" size={13} color="white" />}
+                                                {active && <Ionicons name="close" size={13} color="#292524" />}
                                             </HStack>
                                         </Pressable>
                                     );
@@ -309,43 +323,34 @@ export default function POSScreen() {
                                 </Box>
                             )}
                             {visibleProducts.map(product => {
-                                const outOfStock = product.stock <= 0;
-                                const lowStock = product.stock > 0 && product.stock <= 5;
+                                const lowStock = product.stock <= 5;
+                                const colors = productColor(product);
                                 return (
                                     <Pressable
                                         key={product.id}
                                         w="48%"
-                                        disabled={outOfStock}
-                                        opacity={outOfStock ? 0.5 : 1}
                                         onPress={() => {
-                                            try { animateLayout(); addToCart(product); }
-                                            catch (e) { alert(e instanceof Error ? e.message : 'Error'); }
+                                            animateLayout();
+                                            if (!addToCart(product)) {
+                                                alert(`Solo hay ${product.stock} unidades disponibles de ${product.name}`);
+                                            }
                                         }}
                                     >
-                                        <Card p="$3" variant="elevated">
+                                        <Card
+                                            p="$3"
+                                            style={{ backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }}
+                                        >
                                             <VStack alignItems="center" space="xs">
-                                                <Box
-                                                    w="$10" h="$10"
-                                                    bg={outOfStock ? '$coolGray200' : lowStock ? '$amber100' : '$coolGray100'}
-                                                    borderRadius="$full"
-                                                    alignItems="center"
-                                                    justifyContent="center"
-                                                >
-                                                    <Text>{outOfStock ? '❌' : lowStock ? '⚠️' : '🛒'}</Text>
-                                                </Box>
                                                 <Text fontWeight="bold" textAlign="center">{product.name}</Text>
-                                                <Text
-                                                    color={outOfStock ? '$coolGray400' : '$emerald600'}
-                                                    fontWeight="bold"
-                                                >
+                                                <Text color="$emerald600" fontWeight="bold">
                                                     ₡{product.price}
                                                 </Text>
                                                 <Text
                                                     size="xs"
-                                                    color={outOfStock ? '$red500' : lowStock ? '$amber500' : '$coolGray500'}
+                                                    color={lowStock ? '$amber600' : '$coolGray500'}
                                                     fontWeight={lowStock ? '$semibold' : '$normal'}
                                                 >
-                                                    {outOfStock ? 'Sin Stock' : `Stock: ${product.stock}`}
+                                                    Stock: {product.stock}
                                                 </Text>
                                             </VStack>
                                         </Card>
@@ -358,7 +363,7 @@ export default function POSScreen() {
 
                 {/* BOTTOM: Cart — flex 0 (alto de contenido) con carrito vacío */}
                 <Box
-                    flex={cartEmpty ? 0 : 1} bg="$white" p="$4"
+                    flex={bottomFlex} bg="$white" p="$4"
                     borderTopWidth={1} borderColor="$coolGray200"
                     shadowColor="$black" shadowOffset={{ width: 0, height: -2 }}
                     shadowOpacity={0.1} shadowRadius={4} elevation={10}
@@ -516,9 +521,9 @@ export default function POSScreen() {
                                 value={checkoutPin}
                                 onChangeText={t => { setCheckoutPin(t.toUpperCase()); setPinError(''); }}
                                 maxLength={4}
-                                autoCapitalize="characters"
                                 textAlign="center"
                                 placeholder="· · · ·"
+                                secureTextEntry
                             />
                         </Input>
                         {pinError ? (
@@ -544,28 +549,37 @@ export default function POSScreen() {
             </Modal>
 
             {/* Camera Modal */}
-            <Modal visible={isScanning} animationType="slide" presentationStyle="pageSheet">
-                <Box flex={1} bg="$black">
+        </SafeAreaView>
+
+            {/* Escáner como overlay en la MISMA ventana, no como <Modal>: el SurfaceView
+                de la cámara dentro de la ventana separada del Modal se compone mal en
+                Magic OS (Honor) — media pantalla quedaba congelada hasta cambiar de app.
+                La cámara queda montada detrás de la tarjeta (efecto inmersivo); el scrim
+                rgba oscurece sin taparla. */}
+            {isScanning && (
+                <Box style={StyleSheet.absoluteFill} bg="$black" zIndex={100}>
                     <CameraView
                         style={StyleSheet.absoluteFill}
                         facing="back"
                         onBarcodeScanned={handleBarCodeScanned}
                     />
-                    <Box position="absolute" bottom={48} left={0} right={0} alignItems="center">
-                        <Pressable
-                            onPress={stopScanning}
-                            borderWidth={1}
-                            borderColor="$white"
-                            borderRadius="$md"
-                            px="$5" py="$3"
-                            flexDirection="row"
-                            alignItems="center"
-                        >
-                            {/* @ts-ignore */}
-                            <Ionicons name="close" size={18} color="white" style={{ marginRight: 6 }} />
-                            <Text color="$white" fontWeight="$semibold">Cerrar</Text>
-                        </Pressable>
-                    </Box>
+                    {!scannedProduct && (
+                        <Box position="absolute" bottom={48} left={0} right={0} alignItems="center">
+                            <Pressable
+                                onPress={stopScanning}
+                                borderWidth={1}
+                                borderColor="$white"
+                                borderRadius="$md"
+                                px="$5" py="$3"
+                                flexDirection="row"
+                                alignItems="center"
+                            >
+                                {/* @ts-ignore */}
+                                <Ionicons name="close" size={18} color="white" style={{ marginRight: 6 }} />
+                                <Text color="$white" fontWeight="$semibold">Cerrar</Text>
+                            </Pressable>
+                        </Box>
+                    )}
 
                     {scannedProduct && (
                         <Box position="absolute" top={0} left={0} right={0} bottom={0} justifyContent="center" alignItems="center" bg="rgba(0,0,0,0.7)">
@@ -587,7 +601,7 @@ export default function POSScreen() {
                         </Box>
                     )}
                 </Box>
-            </Modal>
-        </SafeAreaView>
+            )}
+        </Box>
     );
 }
