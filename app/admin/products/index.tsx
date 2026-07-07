@@ -411,9 +411,12 @@ export default function ProductsAdmin() {
                 </Box>
             </Modal>
 
-            {/* Scanner Modal */}
-            <Modal visible={isScanning} animationType="slide" presentationStyle="pageSheet">
-                <Box flex={1} bg="$black">
+            {/* Escáner como overlay en la MISMA ventana, no como <Modal>: en Magic OS
+                (Honor) la ventana separada del Modal compone mal el SurfaceView de la
+                cámara y deja media pantalla congelada hasta cambiar de app. Mismo fix
+                aplicado en app/index.tsx. */}
+            {isScanning && (
+                <Box style={StyleSheet.absoluteFill} bg="$black" zIndex={100}>
                     <CameraView
                         style={StyleSheet.absoluteFill}
                         facing="back"
@@ -425,7 +428,7 @@ export default function ProductsAdmin() {
                         </Button>
                     </Box>
                 </Box>
-            </Modal>
+            )}
         </Box>
     );
 }
