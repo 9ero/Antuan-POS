@@ -63,7 +63,7 @@ db/
                        pushStockMovementToTurso, restoreFromTurso, cola offline pending_sync
 utils/
   pin.ts             — generatePin() sin caracteres ambiguos (sin O/0/I/1)
-  constants.ts       — ADMIN_PIN (lee EXPO_PUBLIC_ADMIN_PIN, fallback '1234'); usado por admin/_layout y history
+  constants.ts       — ADMIN_PIN (lee EXPO_PUBLIC_ADMIN_PIN, fallback '1234'); usado por admin/_layout
 .env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN + EXPO_PUBLIC_ADMIN_PIN (gitignored, NO tocar .env.example)
 .env.example         — Plantilla de credenciales con placeholders (commiteado, solo para referencia)
 ```

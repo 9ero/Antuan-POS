@@ -245,20 +245,6 @@ export const deleteCheckoutPin = async (userId: number) => {
     return await dbResult.runAsync('DELETE FROM checkout_pins WHERE user_id = ?', userId);
 };
 
-export const deleteAllTransactions = async () => {
-    try {
-        await dbResult.execAsync('BEGIN TRANSACTION');
-        await dbResult.runAsync('DELETE FROM transaction_items');
-        await dbResult.runAsync('DELETE FROM transactions');
-        await dbResult.execAsync('COMMIT');
-        return { success: true };
-    } catch (e) {
-        console.error(e);
-        await dbResult.execAsync('ROLLBACK');
-        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
-    }
-};
-
 export interface TransactionDetail {
     id: number;
     user_id: number;
