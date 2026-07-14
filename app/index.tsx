@@ -125,37 +125,19 @@ export default function POSScreen() {
     );
 
     // Scanner
+    const [scanError, setScanError] = useState<{ title: string; message: string } | null>(null);
+
     const handleBarCodeScanned = async ({ data }: { data: string }) => {
-        if (scannedProduct) return;
+        if (scannedProduct || scanError) return;
         const product = products.find(p => p.barcode === data);
         if (product) {
             if (product.stock <= 0) {
-                toast.show({
-                    placement: 'top',
-                    render: ({ id }) => (
-                        <Toast nativeID={'toast-' + id} action="error" variant="solid">
-                            <VStack space="xs">
-                                <ToastTitle>Stock Agotado</ToastTitle>
-                                <ToastDescription>{product.name} no tiene existencias.</ToastDescription>
-                            </VStack>
-                        </Toast>
-                    ),
-                });
+                setScanError({ title: 'Stock Agotado', message: `${product.name} no tiene existencias.` });
                 return;
             }
             setScannedProduct(product);
         } else {
-            toast.show({
-                placement: 'top',
-                render: ({ id }) => (
-                    <Toast nativeID={'toast-' + id} action="error" variant="solid">
-                        <VStack space="xs">
-                            <ToastTitle>No encontrado</ToastTitle>
-                            <ToastDescription>Código {data} no existe</ToastDescription>
-                        </VStack>
-                    </Toast>
-                ),
-            });
+            setScanError({ title: 'No encontrado', message: `Código ${data} no existe` });
         }
     };
 
@@ -563,7 +545,7 @@ export default function POSScreen() {
                         facing="back"
                         onBarcodeScanned={handleBarCodeScanned}
                     />
-                    {!scannedProduct && (
+                    {!scannedProduct && !scanError && (
                         <Box position="absolute" bottom={48} left={0} right={0} alignItems="center">
                             <Pressable
                                 onPress={stopScanning}
@@ -578,6 +560,20 @@ export default function POSScreen() {
                                 <Ionicons name="close" size={18} color="white" style={{ marginRight: 6 }} />
                                 <Text color="$white" fontWeight="$semibold">Cerrar</Text>
                             </Pressable>
+                        </Box>
+                    )}
+
+                    {scanError && (
+                        <Box position="absolute" top={0} left={0} right={0} bottom={0} justifyContent="center" alignItems="center" bg="rgba(0,0,0,0.7)">
+                            <Card p="$5" w="90%" variant="elevated">
+                                <VStack space="md" alignItems="center">
+                                    <Heading size="lg" textAlign="center" color="$red600">{scanError.title}</Heading>
+                                    <Text textAlign="center" color="$coolGray600">{scanError.message}</Text>
+                                    <Button onPress={() => setScanError(null)} bg="$red600" mt="$4" w="100%">
+                                        <ButtonText>Entendido</ButtonText>
+                                    </Button>
+                                </VStack>
+                            </Card>
                         </Box>
                     )}
 
