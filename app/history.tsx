@@ -162,7 +162,8 @@ export default function HistoryScreen() {
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return '';
-        return new Date(dateStr).toLocaleString('es-CR');
+        const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+        return new Date(normalized).toLocaleString('es-CR');
     };
 
     const handleExport = async () => {

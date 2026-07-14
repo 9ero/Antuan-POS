@@ -131,7 +131,7 @@ export default function InventoryAdmin() {
         }
     };
 
-    const formatDate = (d: string) => new Date(d).toLocaleString('es-CR', {
+    const formatDate = (d: string) => new Date(d.includes('T') ? d : d.replace(' ', 'T') + 'Z').toLocaleString('es-CR', {
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
     });
 
