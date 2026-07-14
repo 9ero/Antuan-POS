@@ -118,7 +118,8 @@ function buildShareText(s: ClosingSummary): string {
     for (const p of s.byProduct) {
         const days = p.daysRemaining !== null ? ` · ~${p.daysRemaining} días stock` : '';
         const lost = p.unitsLost > 0 ? ` · ${p.unitsLost} faltantes` : '';
-        lines.push(`• ${p.name} — ${p.unitsSold} vendidas${lost}, ${fmt(p.revenue)}${days}`);
+        const transferred = p.unitsTransferred > 0 ? ` · ${p.unitsTransferred} trasladados` : '';
+        lines.push(`• ${p.name} — ${p.unitsSold} vendidas${lost}${transferred}, ${fmt(p.revenue)}${days}`);
     }
     const { burnRanking, profitRanking } = computeStats(s);
     if (burnRanking.length > 0) {
@@ -278,6 +279,7 @@ export default function CashClosingScreen() {
             Producto: p.name,
             Vendidas: p.unitsSold,
             Faltantes: p.unitsLost,
+            Trasladados: p.unitsTransferred,
             'Ingresos (₡)': fmtN(p.revenue),
             'Costo (₡)': fmtN(p.cost),
             'Ganancia (₡)': fmtN(p.profit),
@@ -535,6 +537,11 @@ export default function CashClosingScreen() {
                                                                 {p.unitsLost} faltantes
                                                             </Text>
                                                         )}
+                                                        {p.unitsTransferred > 0 && (
+                                                            <Text size="xs" color="$coolGray500" fontWeight="$semibold">
+                                                                {p.unitsTransferred} trasladados
+                                                            </Text>
+                                                        )}
                                                         {p.daysRemaining !== null && (
                                                             <Text size="xs" color={daysColor(p.daysRemaining)} fontWeight="$semibold">
                                                                 ~{p.daysRemaining} días
@@ -641,6 +648,7 @@ export default function CashClosingScreen() {
                                                                     <HStack space="sm">
                                                                         {p.unitsSold > 0 && <Text size="xs" color="$coolGray500">×{p.unitsSold} vend.</Text>}
                                                                         {p.unitsLost > 0 && <Text size="xs" color="$red500">×{p.unitsLost} falt.</Text>}
+                                                                        {p.unitsTransferred > 0 && <Text size="xs" color="$coolGray500">×{p.unitsTransferred} trasl.</Text>}
                                                                     </HStack>
                                                                 </VStack>
                                                                 <Text size="sm" color="$blue700">{fmt(p.revenue)}</Text>
