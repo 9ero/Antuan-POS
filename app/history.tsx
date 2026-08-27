@@ -3,10 +3,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { ScrollView as RNScrollView } from 'react-native';
 import {
     getTransactions, getUsers, getProducts, getCurrentPeriodStart,
-    TransactionDetail, deleteAllTransactions,
+    TransactionDetail,
 } from '@/db/queries';
 import { User, Product } from '@/db/schemas';
-import { ADMIN_PIN } from '@/utils/constants';
 import { useFocusEffect } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';
@@ -24,7 +23,6 @@ import {
     Icon,
     CloseIcon,
     DownloadIcon,
-    TrashIcon,
     ButtonIcon,
     Modal,
     ModalBackdrop,
@@ -36,9 +34,6 @@ import {
     Input,
     InputField,
     Pressable,
-    Toast,
-    ToastTitle,
-    useToast,
 } from '@gluestack-ui/themed';
 
 type Period = 'period' | 'today' | 'week' | 'month' | 'all';
@@ -64,10 +59,7 @@ export default function HistoryScreen() {
     const [period, setPeriod] = useState<Period>('period');
     const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
     const [showUserModal, setShowUserModal] = useState(false);
-    const [showClearModal, setShowClearModal] = useState(false);
-    const [pin, setPin] = useState('');
     const router = useRouter();
-    const toast = useToast();
 
     useFocusEffect(
         useCallback(() => {
@@ -170,7 +162,8 @@ export default function HistoryScreen() {
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return '';
-        return new Date(dateStr).toLocaleString('es-CR');
+        const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+        return new Date(normalized).toLocaleString('es-CR');
     };
 
     const handleExport = async () => {
@@ -269,44 +262,6 @@ export default function HistoryScreen() {
         }
     };
 
-    const confirmClear = async () => {
-        if (pin === ADMIN_PIN) {
-            const result = await deleteAllTransactions();
-            if (result.success) {
-                toast.show({
-                    placement: 'top',
-                    render: ({ id }) => (
-                        <Toast nativeID={'toast-' + id} action="success" variant="solid">
-                            <ToastTitle>Historial Eliminado</ToastTitle>
-                        </Toast>
-                    ),
-                });
-                setShowClearModal(false);
-                setPeriod('period');
-                setSelectedUserId(null);
-                loadAll();
-            } else {
-                toast.show({
-                    placement: 'top',
-                    render: ({ id }) => (
-                        <Toast nativeID={'toast-' + id} action="error" variant="solid">
-                            <ToastTitle>Error: {result.error}</ToastTitle>
-                        </Toast>
-                    ),
-                });
-            }
-        } else {
-            toast.show({
-                placement: 'top',
-                render: ({ id }) => (
-                    <Toast nativeID={'toast-' + id} action="error" variant="solid">
-                        <ToastTitle>PIN Incorrecto</ToastTitle>
-                    </Toast>
-                ),
-            });
-        }
-    };
-
     return (
         <Box flex={1} bg="$coolGray50">
             <Stack.Screen options={{ headerShown: false }} />
@@ -316,9 +271,6 @@ export default function HistoryScreen() {
                 <HStack justifyContent="space-between" alignItems="center" mb="$3">
                     <Heading size="md">Historial de Ventas</Heading>
                     <HStack space="sm">
-                        <Button onPress={() => { setPin(''); setShowClearModal(true); }} size="sm" variant="outline" action="negative" borderColor="$red500">
-                            <ButtonIcon as={TrashIcon} color="$red500" />
-                        </Button>
                         <Button onPress={handleExport} size="sm" bg="$blue600">
                             <ButtonIcon as={DownloadIcon} mr="$1" />
                             <ButtonText>Excel</ButtonText>
@@ -521,40 +473,6 @@ export default function HistoryScreen() {
                 </ModalContent>
             </Modal>
 
-            {/* Clear history modal */}
-            <Modal isOpen={showClearModal} onClose={() => setShowClearModal(false)} avoidKeyboard>
-                <ModalBackdrop />
-                <ModalContent>
-                    <ModalHeader>
-                        <Heading size="lg">Borrar Historial</Heading>
-                        <ModalCloseButton><Icon as={CloseIcon} /></ModalCloseButton>
-                    </ModalHeader>
-                    <ModalBody>
-                        <Text size="sm" mb="$4" color="$coolGray500">
-                            Esta acción eliminará todas las ventas registradas. Exporte el informe antes de continuar.
-                        </Text>
-                        <Text size="sm" fontWeight="bold" mb="$2">PIN de administrador:</Text>
-                        <Input>
-                            <InputField
-                                type="password"
-                                keyboardType="numeric"
-                                maxLength={4}
-                                value={pin}
-                                onChangeText={setPin}
-                                placeholder="****"
-                            />
-                        </Input>
-                    </ModalBody>
-                    <ModalFooter>
-                        <Button variant="outline" size="sm" action="secondary" mr="$3" onPress={() => setShowClearModal(false)}>
-                            <ButtonText>Cancelar</ButtonText>
-                        </Button>
-                        <Button size="sm" action="negative" bg="$red500" onPress={confirmClear}>
-                            <ButtonText>Confirmar Borrado</ButtonText>
-                        </Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
         </Box>
     );
 }

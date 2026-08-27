@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { Product, StockMovement, getProducts, addStock, registerLoss, getStockMovements } from '@/db/queries';
+import { Product, StockMovement, getProducts, addStock, registerLoss, transferStock, getStockMovements } from '@/db/queries';
 import { isConfigured } from '@/db/turso';
 import { getDeviceConfig, pushStockMovementToTurso } from '@/db/sync';
 import {
@@ -38,12 +38,17 @@ const REASON_LABELS: Record<string, string> = {
     recepcion: 'Recepción',
     extravio: 'Faltante',
     ajuste: 'Ajuste',
+    traslado: 'Traslado',
 };
 
-type ModalMode = 'recepcion' | 'extravio';
+type ModalMode = 'recepcion' | 'extravio' | 'traslado';
+
+const normalize = (s: string) =>
+    s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export default function InventoryAdmin() {
     const [products, setProducts] = useState<Product[]>([]);
+    const [search, setSearch] = useState('');
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [movements, setMovements] = useState<StockMovement[]>([]);
     const [loadingMovements, setLoadingMovements] = useState(false);
@@ -67,6 +72,14 @@ export default function InventoryAdmin() {
     };
 
     useFocusEffect(useCallback(() => { loadProducts(); }, []));
+
+    const filteredProducts = useMemo(() => {
+        const q = normalize(search.trim());
+        if (!q) return products;
+        return products.filter(p =>
+            normalize(p.name).includes(q) || (p.barcode || '').toLowerCase().includes(q)
+        );
+    }, [products, search]);
 
     const toggleHistory = async (productId: number) => {
         if (expandedId === productId) {
@@ -96,7 +109,9 @@ export default function InventoryAdmin() {
         try {
             const result = modalMode === 'recepcion'
                 ? await addStock(modalProductId!, qty)
-                : await registerLoss(modalProductId!, qty);
+                : modalMode === 'extravio'
+                ? await registerLoss(modalProductId!, qty)
+                : await transferStock(modalProductId!, qty);
             if (result.success && result.movementId) {
                 if (isConfigured) {
                     getDeviceConfig().then(cfg => {
@@ -119,7 +134,7 @@ export default function InventoryAdmin() {
         }
     };
 
-    const formatDate = (d: string) => new Date(d).toLocaleString('es-CR', {
+    const formatDate = (d: string) => new Date(d.includes('T') ? d : d.replace(' ', 'T') + 'Z').toLocaleString('es-CR', {
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
     });
 
@@ -127,9 +142,27 @@ export default function InventoryAdmin() {
         <Box flex={1} bg="$coolGray50">
             <Stack.Screen options={{ title: 'Inventario', headerShown: true }} />
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <Box px="$4" pt="$3" pb="$1">
+                <Input bg="$white">
+                    <InputField
+                        placeholder="Buscar por nombre o código…"
+                        value={search}
+                        onChangeText={setSearch}
+                        autoCapitalize="none"
+                    />
+                </Input>
+            </Box>
+
+            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8 }}>
                 <VStack space="md">
-                    {products.map(product => {
+                    {filteredProducts.length === 0 && (
+                        <Box alignItems="center" py="$8">
+                            <Text color="$coolGray400">
+                                {search.trim() ? 'Sin resultados' : 'No hay productos'}
+                            </Text>
+                        </Box>
+                    )}
+                    {filteredProducts.map(product => {
                         const isLow = product.stock <= LOW_STOCK;
                         const isExpanded = expandedId === product.id;
 
@@ -167,30 +200,40 @@ export default function InventoryAdmin() {
                                 </HStack>
 
                                 {/* Actions */}
-                                <HStack space="sm" mb="$2">
-                                    <Button
-                                        flex={1} size="sm" bg="$blue600"
-                                        onPress={() => openModal(product, 'recepcion')}
-                                    >
-                                        <ButtonText>+ Recibir</ButtonText>
-                                    </Button>
-                                    <Button
-                                        flex={1} size="sm" variant="outline" action="negative"
-                                        onPress={() => openModal(product, 'extravio')}
-                                    >
-                                        <ButtonText color="$red500">Faltante</ButtonText>
-                                    </Button>
-                                    <Pressable
-                                        onPress={() => toggleHistory(product.id!)}
-                                        px="$3" py="$2" borderRadius="$md"
-                                        bg={isExpanded ? '$coolGray200' : '$coolGray100'}
-                                        justifyContent="center" alignItems="center"
-                                    >
-                                        <Text size="xs" color="$coolGray600">
-                                            {isExpanded ? '▲' : '▼'} Historial
-                                        </Text>
-                                    </Pressable>
-                                </HStack>
+                                <VStack space="sm" mb="$2">
+                                    <HStack space="sm">
+                                        <Button
+                                            flex={1} size="sm" bg="$blue600"
+                                            onPress={() => openModal(product, 'recepcion')}
+                                        >
+                                            <ButtonText>+ Recibir</ButtonText>
+                                        </Button>
+                                        <Button
+                                            flex={1} size="sm" variant="outline" borderColor="$coolGray400"
+                                            onPress={() => openModal(product, 'traslado')}
+                                        >
+                                            <ButtonText color="$coolGray600">Trasladar</ButtonText>
+                                        </Button>
+                                    </HStack>
+                                    <HStack space="sm">
+                                        <Button
+                                            flex={1} size="sm" variant="outline" action="negative"
+                                            onPress={() => openModal(product, 'extravio')}
+                                        >
+                                            <ButtonText color="$red500">Faltante</ButtonText>
+                                        </Button>
+                                        <Pressable
+                                            onPress={() => toggleHistory(product.id!)}
+                                            flex={1} borderRadius="$md"
+                                            bg={isExpanded ? '$coolGray200' : '$coolGray100'}
+                                            justifyContent="center" alignItems="center"
+                                        >
+                                            <Text size="xs" color="$coolGray600">
+                                                {isExpanded ? '▲' : '▼'} Historial
+                                            </Text>
+                                        </Pressable>
+                                    </HStack>
+                                </VStack>
 
                                 {/* Movement history */}
                                 {isExpanded && (
@@ -209,7 +252,11 @@ export default function InventoryAdmin() {
                                                         <HStack space="sm" alignItems="center">
                                                             <Text
                                                                 fontWeight="$bold" size="sm"
-                                                                color={m.quantity_change > 0 ? '$emerald600' : '$red500'}
+                                                                color={
+                                                                    m.quantity_change > 0 ? '$emerald600'
+                                                                        : m.reason === 'traslado' ? '$coolGray600'
+                                                                        : '$red500'
+                                                                }
                                                             >
                                                                 {m.quantity_change > 0 ? '+' : ''}{m.quantity_change}
                                                             </Text>
@@ -238,7 +285,9 @@ export default function InventoryAdmin() {
                 <ModalContent>
                     <ModalHeader>
                         <Heading size="md">
-                            {modalMode === 'recepcion' ? 'Recibir mercancía' : 'Reportar faltante'}
+                            {modalMode === 'recepcion' ? 'Recibir mercancía'
+                                : modalMode === 'extravio' ? 'Reportar faltante'
+                                : 'Registrar traslado'}
                         </Heading>
                         <ModalCloseButton><Icon as={CloseIcon} /></ModalCloseButton>
                     </ModalHeader>
@@ -247,7 +296,9 @@ export default function InventoryAdmin() {
                         <FormControl>
                             <FormControlLabel>
                                 <FormControlLabelText>
-                                    {modalMode === 'recepcion' ? 'Cantidad a recibir' : 'Cantidad faltante'}
+                                    {modalMode === 'recepcion' ? 'Cantidad a recibir'
+                                        : modalMode === 'extravio' ? 'Cantidad faltante'
+                                        : 'Cantidad a trasladar'}
                                 </FormControlLabelText>
                             </FormControlLabel>
                             <Input size="xl">
@@ -260,6 +311,11 @@ export default function InventoryAdmin() {
                                 />
                             </Input>
                         </FormControl>
+                        {modalMode === 'traslado' && (
+                            <Text size="xs" color="$coolGray500" mt="$2">
+                                Se descuenta de este inventario. Registra la recepción en el punto de venta destino.
+                            </Text>
+                        )}
                         {modalError ? <Text size="sm" color="$red500" mt="$2">{modalError}</Text> : null}
                     </ModalBody>
                     <ModalFooter>
@@ -268,7 +324,7 @@ export default function InventoryAdmin() {
                         </Button>
                         <Button
                             size="sm"
-                            bg={modalMode === 'recepcion' ? '$blue600' : '$red500'}
+                            bg={modalMode === 'recepcion' ? '$blue600' : modalMode === 'extravio' ? '$red500' : '$coolGray600'}
                             isDisabled={isSubmitting}
                             onPress={handleConfirm}
                         >

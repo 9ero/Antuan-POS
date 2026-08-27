@@ -201,6 +201,25 @@ export const registerLoss = async (productId: number, quantity: number) => {
     }
 };
 
+export const transferStock = async (productId: number, quantity: number) => {
+    try {
+        await dbResult.execAsync('BEGIN TRANSACTION');
+        const product = await dbResult.getFirstAsync<Product>('SELECT stock FROM products WHERE id = ?', productId);
+        if (!product) throw new Error('Producto no encontrado');
+        if (product.stock < quantity) throw new Error(`Stock insuficiente. Disponible: ${product.stock}`);
+        await dbResult.runAsync('UPDATE products SET stock = stock - ? WHERE id = ?', quantity, productId);
+        const movResult = await dbResult.runAsync(
+            'INSERT INTO stock_movements (product_id, quantity_change, reason) VALUES (?, ?, ?)',
+            productId, -quantity, 'traslado'
+        );
+        await dbResult.execAsync('COMMIT');
+        return { success: true, movementId: movResult.lastInsertRowId as number };
+    } catch (e) {
+        await dbResult.execAsync('ROLLBACK');
+        return { success: false, movementId: null, error: e instanceof Error ? e.message : 'Error desconocido' };
+    }
+};
+
 // Checkout PINs
 export interface CheckoutPin {
     id: number;
@@ -243,20 +262,6 @@ export const validatePin = async (pin: string, userId: number): Promise<boolean>
 
 export const deleteCheckoutPin = async (userId: number) => {
     return await dbResult.runAsync('DELETE FROM checkout_pins WHERE user_id = ?', userId);
-};
-
-export const deleteAllTransactions = async () => {
-    try {
-        await dbResult.execAsync('BEGIN TRANSACTION');
-        await dbResult.runAsync('DELETE FROM transaction_items');
-        await dbResult.runAsync('DELETE FROM transactions');
-        await dbResult.execAsync('COMMIT');
-        return { success: true };
-    } catch (e) {
-        console.error(e);
-        await dbResult.execAsync('ROLLBACK');
-        return { success: false, error: e instanceof Error ? e.message : 'Error desconocido' };
-    }
 };
 
 export interface TransactionDetail {
@@ -347,11 +352,26 @@ export interface ClosingProductSummary {
     name: string;
     unitsSold: number;
     unitsLost: number;
+    unitsTransferred: number;
     revenue: number;
     cost: number;
     profit: number;
     currentStock: number;
     daysRemaining: number | null;
+}
+
+// Foto del inventario al momento del cierre. Se guarda dentro de summary_json para que
+// un cierre viejo se exporte con el stock que tenía ese día, no con el stock de hoy.
+export interface ClosingInventoryItem {
+    productId: number;
+    name: string;
+    categoryName: string;
+    barcode: string;
+    stock: number;
+    costPrice: number;
+    price: number;
+    stockValueCost: number;
+    stockValueSale: number;
 }
 
 export interface ClosingSummary {
@@ -363,7 +383,34 @@ export interface ClosingSummary {
     totalProfit: number;
     byUser: ClosingUserSummary[];
     byProduct: ClosingProductSummary[];
+    inventory: ClosingInventoryItem[];
 }
+
+export const buildInventorySnapshot = async (): Promise<ClosingInventoryItem[]> => {
+    const rows = await dbResult.getAllAsync<{
+        id: number; name: string; barcode: string | null; stock: number;
+        cost_price: number; price: number; category_name: string | null;
+    }>(
+        `SELECT p.id, p.name, p.barcode, p.stock, p.price,
+                COALESCE(p.cost_price, 0) as cost_price,
+                c.name as category_name
+         FROM products p
+         LEFT JOIN categories c ON p.category_id = c.id
+         WHERE p.is_active = 1
+         ORDER BY p.stock ASC, p.name ASC`
+    );
+    return rows.map(r => ({
+        productId: r.id,
+        name: r.name,
+        categoryName: r.category_name ?? 'Sin categoría',
+        barcode: r.barcode ?? '',
+        stock: r.stock,
+        costPrice: r.cost_price,
+        price: r.price,
+        stockValueCost: r.stock * r.cost_price,
+        stockValueSale: r.stock * r.price,
+    }));
+};
 
 export const getCurrentPeriodStart = async (): Promise<string> => {
     const lastClosing = await dbResult.getFirstAsync<{ closed_at: string }>(
@@ -380,6 +427,8 @@ export const getCurrentPeriodStart = async (): Promise<string> => {
 };
 
 export const buildClosingSummary = async (openedAt: string, closedAt: string): Promise<ClosingSummary> => {
+    const inventory = await buildInventorySnapshot();
+
     const transactions = await dbResult.getAllAsync<{
         id: number; user_id: number | null; total: number; user_name: string | null;
     }>(
@@ -391,7 +440,7 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
     );
 
     if (transactions.length === 0) {
-        return { openedAt, closedAt, transactionCount: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0, byUser: [], byProduct: [] };
+        return { openedAt, closedAt, transactionCount: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0, byUser: [], byProduct: [], inventory };
     }
 
     const items = await dbResult.getAllAsync<{
@@ -431,6 +480,7 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
                 name: item.product_name,
                 unitsSold: item.quantity,
                 unitsLost: 0,
+                unitsTransferred: 0,
                 revenue, cost,
                 profit: revenue - cost,
                 currentStock: item.current_stock,
@@ -462,8 +512,40 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
                 name: loss.product_name,
                 unitsSold: 0,
                 unitsLost: loss.units_lost,
+                unitsTransferred: 0,
                 revenue: 0, cost: 0, profit: 0,
                 currentStock: loss.current_stock,
+                daysRemaining: null,
+            });
+        }
+    }
+
+    // Merge traslados (no cuentan como pérdida ni como venta, solo se informan aparte)
+    const transfers = await dbResult.getAllAsync<{
+        product_id: number; product_name: string; units_transferred: number; current_stock: number;
+    }>(
+        `SELECT sm.product_id, p.name as product_name, p.stock as current_stock,
+                SUM(ABS(sm.quantity_change)) as units_transferred
+         FROM stock_movements sm
+         JOIN products p ON sm.product_id = p.id
+         WHERE sm.reason = 'traslado'
+           AND datetime(sm.created_at) >= datetime(?) AND datetime(sm.created_at) < datetime(?)
+         GROUP BY sm.product_id`,
+        openedAt, closedAt
+    );
+    for (const transfer of transfers) {
+        const existing = productMap.get(transfer.product_id);
+        if (existing) {
+            existing.unitsTransferred = transfer.units_transferred;
+        } else {
+            productMap.set(transfer.product_id, {
+                productId: transfer.product_id,
+                name: transfer.product_name,
+                unitsSold: 0,
+                unitsLost: 0,
+                unitsTransferred: transfer.units_transferred,
+                revenue: 0, cost: 0, profit: 0,
+                currentStock: transfer.current_stock,
                 daysRemaining: null,
             });
         }
@@ -533,6 +615,7 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
         totalProfit: totalRevenue - totalCost,
         byUser: Array.from(userMap.values()).sort((a, b) => b.total - a.total),
         byProduct,
+        inventory,
     };
 };
 

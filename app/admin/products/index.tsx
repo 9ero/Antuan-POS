@@ -1,4 +1,5 @@
 import { Modal, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useState, useCallback, useMemo } from 'react';
 import { Product, Category, getProducts, getAllCategories, addProduct, deleteProduct, updateProduct } from '@/db/queries';
@@ -44,6 +45,7 @@ const normalize = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export default function ProductsAdmin() {
+    const insets = useSafeAreaInsets();
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [search, setSearch] = useState('');
@@ -162,9 +164,19 @@ export default function ProductsAdmin() {
         loadProducts();
     };
 
+    const openScanner = () => {
+        setModalVisible(false);
+        startScanning();
+    };
+
+    const closeScanner = () => {
+        stopScanning();
+        setModalVisible(true);
+    };
+
     const handleBarCodeScanned = ({ data }: { data: string }) => {
         setNewProduct(prev => ({ ...prev, barcode: data }));
-        stopScanning();
+        closeScanner();
     };
 
     const closeModal = () => {
@@ -188,7 +200,7 @@ export default function ProductsAdmin() {
                 </Input>
             </Box>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8 }}>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 100 }}>
                 <VStack space="md">
                     {filteredProducts.length === 0 && (
                         <Box alignItems="center" py="$8">
@@ -227,9 +239,12 @@ export default function ProductsAdmin() {
                 </VStack>
             </ScrollView>
 
+            {/* bottom con inset: la pantalla no tiene SafeAreaView y con edge-to-edge
+                el FAB quedaba sobre la barra de navegación de Android */}
             <Fab
                 size="lg"
                 placement="bottom right"
+                bottom={insets.bottom + 24}
                 isHovered={false}
                 isDisabled={false}
                 isPressed={false}
@@ -345,7 +360,7 @@ export default function ProductsAdmin() {
                                     <Input flex={1}>
                                         <InputField value={newProduct.barcode} onChangeText={t => setNewProduct({ ...newProduct, barcode: t })} />
                                     </Input>
-                                    <Button onPress={startScanning} variant="outline" action="secondary">
+                                    <Button onPress={openScanner} variant="outline" action="secondary">
                                         {/* @ts-ignore */}
                                         <ButtonIcon as={Ionicons} name="qr-code-outline" />
                                         </Button>
@@ -379,14 +394,16 @@ export default function ProductsAdmin() {
                                 )}
                             </FormControl>
                         </VStack>
-                        </ScrollView>
 
+                        {/* Botones dentro del ScrollView: si estuvieran pegados al fondo del
+                            sheet, el KeyboardAvoidingView los deja flotando sobre el teclado. */}
                         <Button onPress={handleAdd} size="lg" mb="$2" isDisabled={isSubmitting}>
                             <ButtonText>{isSubmitting ? 'Guardando...' : 'Guardar'}</ButtonText>
                         </Button>
                         <Button onPress={closeModal} variant="link" size="sm">
                             <ButtonText>Cancelar</ButtonText>
                         </Button>
+                        </ScrollView>
                     </Box>
                 </KeyboardAvoidingView>
             </Modal>
@@ -404,21 +421,27 @@ export default function ProductsAdmin() {
                 </Box>
             </Modal>
 
-            {/* Scanner Modal */}
-            <Modal visible={isScanning} animationType="slide" presentationStyle="pageSheet">
-                <Box flex={1} bg="$black">
+            {/* Escáner como overlay en la MISMA ventana, no como <Modal>: en Magic OS
+                (Honor) la ventana separada del Modal compone mal el SurfaceView de la
+                cámara y deja media pantalla congelada hasta cambiar de app. Mismo fix
+                aplicado en app/index.tsx. openScanner/closeScanner además ocultan el
+                <Modal> del formulario mientras se escanea: aunque la cámara ya no está
+                DENTRO de un Modal, tenerlo abierto de fondo (el botón vive dentro de ese
+                formulario) crea la misma ventana nativa en paralelo y reproduce el bug. */}
+            {isScanning && (
+                <Box style={StyleSheet.absoluteFill} bg="$black" zIndex={100}>
                     <CameraView
                         style={StyleSheet.absoluteFill}
                         facing="back"
                         onBarcodeScanned={handleBarCodeScanned}
                     />
                     <Box position="absolute" bottom={40} left={0} right={0} alignItems="center">
-                        <Button onPress={stopScanning} variant="solid" bg="$white">
+                        <Button onPress={closeScanner} variant="solid" bg="$white">
                             <ButtonText color="$black">Cerrar Escáner</ButtonText>
                         </Button>
                     </Box>
                 </Box>
-            </Modal>
+            )}
         </Box>
     );
 }

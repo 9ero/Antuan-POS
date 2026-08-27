@@ -7,14 +7,14 @@ export const isConfigured = Boolean(
     !process.env.EXPO_PUBLIC_TURSO_URL.includes('your-database')
 );
 
-type TursoArg = { type: 'null' } | { type: 'integer'; value: string } | { type: 'real'; value: string } | { type: 'text'; value: string };
+type TursoArg = { type: 'null' } | { type: 'integer'; value: string } | { type: 'float'; value: number } | { type: 'text'; value: string };
 
 function toArg(v: string | number | null | undefined): TursoArg {
     if (v === null || v === undefined) return { type: 'null' };
     if (typeof v === 'number') {
         return Number.isInteger(v)
             ? { type: 'integer', value: String(v) }
-            : { type: 'real', value: String(v) };
+            : { type: 'float', value: v };
     }
     return { type: 'text', value: v };
 }
@@ -22,7 +22,7 @@ function toArg(v: string | number | null | undefined): TursoArg {
 function extractValue(cell: any): string | number | null {
     if (!cell || cell.type === 'null') return null;
     if (cell.type === 'integer') return parseInt(cell.value, 10);
-    if (cell.type === 'real') return parseFloat(cell.value);
+    if (cell.type === 'float') return typeof cell.value === 'number' ? cell.value : parseFloat(cell.value);
     return cell.value ?? null;
 }
 

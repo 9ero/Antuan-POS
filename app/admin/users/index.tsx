@@ -1,6 +1,8 @@
 import { Modal, Share, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { User, CheckoutPin, getUsers, addUser, deleteUser, updateUser, getPinsWithUsers, createCheckoutPin, deleteCheckoutPin } from '@/db/queries';
 import { getDeviceConfig, pushPinsToTurso, pushUserToTurso } from '@/db/sync';
 import { generatePin } from '@/utils/pin';
@@ -30,9 +32,23 @@ import {
     Divider,
 } from '@gluestack-ui/themed';
 
+const normalize = (s: string) =>
+    s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
 export default function UsersAdmin() {
+    const insets = useSafeAreaInsets();
     const [users, setUsers] = useState<User[]>([]);
     const [pinsMap, setPinsMap] = useState<Map<number, CheckoutPin>>(new Map());
+    const [search, setSearch] = useState('');
+    // PINs ocultos por defecto: cualquiera cerca del admin podría leerlos en pantalla.
+    const [visiblePinIds, setVisiblePinIds] = useState<Set<number>>(new Set());
+    const togglePinVisible = (userId: number) => {
+        setVisiblePinIds(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) next.delete(userId); else next.add(userId);
+            return next;
+        });
+    };
 
     // User add/edit modal
     const [userModalVisible, setUserModalVisible] = useState(false);
@@ -54,6 +70,12 @@ export default function UsersAdmin() {
     };
 
     useFocusEffect(useCallback(() => { loadAll(); }, []));
+
+    const filteredUsers = useMemo(() => {
+        const q = normalize(search.trim());
+        if (!q) return users;
+        return users.filter(u => normalize(u.name).includes(q));
+    }, [users, search]);
 
     // Sincronización a Turso al instante (fire-and-forget, cola offline si no hay red)
     const syncPins = () => {
@@ -149,9 +171,27 @@ export default function UsersAdmin() {
         <Box flex={1} bg="$coolGray50">
             <Stack.Screen options={{ title: 'Gestionar Usuarios', headerShown: true }} />
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <Box px="$4" pt="$3" pb="$1">
+                <Input bg="$white">
+                    <InputField
+                        placeholder="Buscar por nombre…"
+                        value={search}
+                        onChangeText={setSearch}
+                        autoCapitalize="none"
+                    />
+                </Input>
+            </Box>
+
+            <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 100 }}>
                 <VStack space="md">
-                    {users.map(item => {
+                    {filteredUsers.length === 0 && (
+                        <Box alignItems="center" py="$8">
+                            <Text color="$coolGray400">
+                                {search.trim() ? 'Sin resultados' : 'No hay usuarios'}
+                            </Text>
+                        </Box>
+                    )}
+                    {filteredUsers.map(item => {
                         const pin = pinsMap.get(item.id!);
                         const isExpanded = expandedPinUserId === item.id;
 
@@ -176,11 +216,21 @@ export default function UsersAdmin() {
                                 <VStack space="sm">
                                     <Text size="xs" color="$coolGray400">PIN de compra</Text>
 
-                                    {/* PIN value */}
+                                    {/* PIN value — oculto por defecto: alguien cerca del admin
+                                        podría leer el PIN de otro usuario en la misma pantalla */}
                                     {pin ? (
-                                        <Text fontWeight="$bold" size="2xl" color="$blue700" letterSpacing={8}>
-                                            {pin.pin}
-                                        </Text>
+                                        <HStack space="sm" alignItems="center">
+                                            <Text fontWeight="$bold" size="2xl" color="$blue700" letterSpacing={8}>
+                                                {visiblePinIds.has(item.id!) ? pin.pin : '•  •  •  •'}
+                                            </Text>
+                                            <Pressable onPress={() => togglePinVisible(item.id!)} hitSlop={8}>
+                                                <Ionicons
+                                                    name={visiblePinIds.has(item.id!) ? 'eye-off-outline' : 'eye-outline'}
+                                                    size={20}
+                                                    color="#3b82f6"
+                                                />
+                                            </Pressable>
+                                        </HStack>
                                     ) : (
                                         <Text color="$coolGray400" size="sm">Sin PIN asignado</Text>
                                     )}
@@ -252,9 +302,12 @@ export default function UsersAdmin() {
                 </VStack>
             </ScrollView>
 
+            {/* bottom con inset: la pantalla no tiene SafeAreaView y con edge-to-edge
+                el FAB quedaba sobre la barra de navegación de Android */}
             <Fab
                 size="lg"
                 placement="bottom right"
+                bottom={insets.bottom + 24}
                 isHovered={false}
                 isDisabled={false}
                 isPressed={false}

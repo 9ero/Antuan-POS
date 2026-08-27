@@ -51,7 +51,7 @@ app/
     products/        — CRUD de productos (costo+margen, categoría obligatoria, búsqueda por nombre/código)
     categories/      — CRUD de categorías (crear, renombrar, activar/desactivar)
     users/           — CRUD de usuarios con gestión de PINs integrada por tarjeta
-    inventory/       — Stock, recepciones y faltantes con historial de movimientos
+    inventory/       — Stock, recepciones, faltantes y traslados entre dispositivos con historial de movimientos
     closing/         — Cierre de caja: reporte período, rankings, historial de cierres, Excel
 db/
   database.ts        — initDatabase(), CREATE TABLE IF NOT EXISTS, migraciones try/catch
@@ -63,7 +63,7 @@ db/
                        pushStockMovementToTurso, restoreFromTurso, cola offline pending_sync
 utils/
   pin.ts             — generatePin() sin caracteres ambiguos (sin O/0/I/1)
-  constants.ts       — ADMIN_PIN (lee EXPO_PUBLIC_ADMIN_PIN, fallback '1234'); usado por admin/_layout y history
+  constants.ts       — ADMIN_PIN (lee EXPO_PUBLIC_ADMIN_PIN, fallback '1234'); usado por admin/_layout
 .env                 — EXPO_PUBLIC_TURSO_URL + EXPO_PUBLIC_TURSO_TOKEN + EXPO_PUBLIC_ADMIN_PIN (gitignored, NO tocar .env.example)
 .env.example         — Plantilla de credenciales con placeholders (commiteado, solo para referencia)
 ```
@@ -93,10 +93,19 @@ utils/
 ## Terminología: faltantes
 En UI se usa **faltante/s** (no "extravío"). El valor en DB sigue siendo `reason = 'extravio'` — solo cambia el texto visible. `REASON_LABELS` en `inventory/index.tsx` mapea `extravio → 'Faltante'`.
 
+## Traslado de inventario entre dispositivos (`app/admin/inventory/index.tsx`)
+Tercer tipo de movimiento en `stock_movements` (`reason = 'traslado'`), para cuando a un punto de venta le faltan productos y se llevan físicamente al otro. **Totalmente independiente de Recibir/Faltante** — no toca su lógica, sus queries (`addStock`/`registerLoss` sin cambios) ni sus colores.
+- `transferStock(productId, quantity)` en `db/queries.ts`: mismo cuerpo que `registerLoss` (valida stock suficiente, resta stock, inserta en `stock_movements`) pero con `reason = 'traslado'`.
+- UI: botón "Trasladar" (outline `$coolGray600` — ni azul de ingreso ni rojo de pérdida) junto a "+ Recibir"; "Faltante" y el toggle "Historial" quedan en una segunda fila. Modal con texto de ayuda: *"Se descuenta de este inventario. Registra la recepción en el punto de venta destino."*
+- **El lado destino no tiene código nuevo:** la mercancía trasladada se registra ahí como una recepción normal (`+ Recibir`) ya existente — el traslado solo formaliza y etiqueta la salida en el dispositivo de origen. No hay sincronización directa entre dispositivos (arquitectura Turso sigue siendo cold storage, ver Feature 7).
+- Historial de movimientos: un traslado saliente se muestra en `$coolGray600` (no rojo), para no leerse como una pérdida real.
+- Reporte de cierre (`buildClosingSummary` en `db/queries.ts`): `unitsTransferred` se agrega en un bloque paralelo al de `extravio`, mostrado como "Trasladados" junto a "Faltantes" (pantalla del período abierto, historial de cierres, texto compartido, Excel hoja "Por Producto"). **No** se suma a `unitsLost` ni entra en `computeStats` — el burn rate de consumo y el ranking de ganancia siguen basados solo en ventas + faltantes reales.
+
 ## Cierre de caja (`app/admin/closing/index.tsx`)
 - `buildClosingSummary(openedAt, closedAt)` — agrega transacciones + ítems + faltantes del período en JS
 - `computeStats(summary)` — rankings: consumo más rápido (uds/día) y mayor ganancia total (sin faltantes)
-- Excel 4 hojas: Resumen, Por Cliente, Por Producto, Estadísticas — solo se genera al confirmar cierre
+- Excel 5 hojas: Resumen, Por Cliente, Por Producto, Estadísticas, **Inventario** — solo se genera al confirmar cierre
+- **Hoja "Inventario"**: foto del stock al momento del cierre (producto, categoría, código, stock, estado, costo/precio unitario, valor a costo y a venta + fila TOTAL con unidades, agotados/bajos y valor del inventario). La construye `buildInventorySnapshot()` (`db/queries.ts`, todos los productos `is_active = 1`, orden stock asc + nombre) y `buildClosingSummary` la incrusta en `ClosingSummary.inventory`, así que viaja dentro de `summary_json`: **reexportar un cierre viejo muestra el stock de ese día, no el de hoy**. Umbral `LOW_STOCK = 5`, el mismo de la pantalla de Inventario. Los cierres confirmados antes de esta versión no tienen el campo — su hoja sale con la fila "Sin datos de inventario para este cierre" (decisión explícita: no se rellena con el stock actual porque sería falsear la fecha, y no se reconstruye hacia atrás desde `stock_movements`)
 - **No hay botón "Exportar Excel" en el período abierto** — el Excel es exclusivo del cierre confirmado para evitar duplicados con el reporte oficial
 - Historial de cierres anteriores con botones Compartir (texto) y Excel
 - `handleClose` usa patrón completo `if (isSubmitting) return` + `try/finally` para evitar doble registro
@@ -118,6 +127,8 @@ new Date(d.includes('T') ? d : d.replace(' ', 'T') + 'Z')
 ```
 Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vienen de `new Date().toISOString()` en JS (como `opened_at`, `closed_at`) ya tienen `T` y `Z` y no necesitan normalización.
 
+**Ya aplicado en:** `admin/closing/index.tsx` (`fmtDate`), `admin/inventory/index.tsx` (`formatDate`) y `history.tsx` (`formatDate`) — los tres muestran `created_at` crudo de SQLite. Los dos últimos mostraban la hora desfasada ~6h hasta que se les agregó la normalización (2026-07-14). Si aparece un `formatDate`/`fmtDate` nuevo para una fecha de SQLite, aplicar el mismo patrón desde el inicio.
+
 ## Feature 7 — Turso backup/restore
 
 ### Arquitectura
@@ -125,6 +136,7 @@ Aplica a `created_at` de `cash_closings`, `transactions`, etc. Los campos que vi
 - Cliente HTTP nativo (`fetch` a `/v2/pipeline`) — sin `@libsql/client` para evitar problemas de bundler en React Native
 - Variables de entorno con prefijo `EXPO_PUBLIC_` (baked en build time): `EXPO_PUBLIC_TURSO_URL`, `EXPO_PUBLIC_TURSO_TOKEN`
 - `isConfigured` en `db/turso.ts` — false si las vars contienen el placeholder `your-database`
+- **Tipos de argumento del protocolo Hrana (`/v2/pipeline`):** `toArg()`/`extractValue()` en `db/turso.ts` deben usar exactamente `null`, `integer` (value **string**), `float` (value **number**, no string), `text`, `blob` — **no existe la variante `'real'`**. Enviarla tumba la petición **completa** con `HTTP 400` ("JSON parse error: unknown variant `real`..."), no solo ese argumento. Bug real (2026-07-14): cualquier producto con `cost_price` decimal (ej. ₡245.50) rompía tanto el push individual como el respaldo manual completo (que agrupa todos los productos en una sola petición), sin afectar usuarios/categorías (sin columnas `REAL`). Si aparece un "esto no se guarda en la nube" para una tabla con columnas numéricas no enteras, sospechar primero de este mismo desajuste antes que de la red.
 
 ### Schema Turso (tablas con PK compuesta `id + device_id`)
 | Tabla | Notas |
@@ -188,6 +200,7 @@ Admin → "⚙ Reset (dev)" ofrece:
 - ✅ Feature 9: Categorías de productos — filtrado rápido en el POS principal (grilla)
 - ✅ Feature 10: Ícono de app — adaptive icon con zona segura al 66% (`adaptive-foreground.png`); EAS Build configurado; APK local verificado
 - ✅ Feature 8: Calibración visual — azul primario + acentos emerald/amber consistentes
+- ✅ Feature 11: Traslado de inventario entre dispositivos — tercer tipo de movimiento (`reason='traslado'`), independiente de Recibir/Faltante, reflejado en inventario/historial/cierre
 - 🔄 Fase de pruebas exhaustivas — EN CURSO: varios días operando el APK local en dispositivo real antes del build de producción
 
 ## Próximos pasos (orden de ejecución por dificultad, visual al final)
@@ -206,10 +219,22 @@ Tokens `$emerald`/`$amber` existen en `@gluestack-ui/config`. Ya no se usa `$pur
 
 ### Interacciones del POS (`app/index.tsx`)
 - **Botón "Escanear"** (antes "Escanear Producto"): elemento **flotante** (absolute, `pointerEvents="box-none"`), centrado y anclado al tope del panel del carrito con sombra — no ocupa fila en el layout y sigue al carrito aunque se expanda o comprima. `translateY` ajusta la altura del flote.
-- **Carrito con 3 estados**: vacío → **comprimido del todo** (`flex 0`, solo barra "Carrito (0)" + Total + Cobrar, sin chevron, tap no expande); con 1+ ítems → tamaño normal (top `flex 2` / carrito `flex 1`); tap en "Carrito" → media pantalla (`flex 1/1`) y vuelve. Todas las mutaciones del carrito llaman `animateLayout()` (`LayoutAnimation`) para transiciones suaves; `useEffect` resetea `cartExpanded` al vaciarse.
+- **Carrito con 3 estados**: vacío → **comprimido del todo** (`flex 0`, solo barra "Carrito (0)" + Total + Cobrar, sin chevron, tap no expande); con 1+ ítems → **~1/4 de pantalla** por defecto (top `flex 3` / carrito `flex 1`); tap en "Carrito" → **~3/4 de pantalla** (top `flex 1` / carrito `flex 3`) y vuelve. Todas las mutaciones del carrito llaman `animateLayout()` (`LayoutAnimation`) para transiciones suaves; `useEffect` resetea `cartExpanded` al vaciarse. El filtro de categoría activo (`activeFilter`) también se resetea a "todos" tras cada venta exitosa.
 - **Venta exitosa**: tarjeta **centrada** (círculo emerald con ✓ + "¡Venta Exitosa!" + monto), `pointerEvents="none"`, se cierra sola a los 2 s (timer con `useRef` que se resetea si hay otra venta). Reemplazó al toast superior; los toasts de error/escáner siguen.
 - **Modal de checkout centrado** (fade, esquinas `$3xl`, `paddingHorizontal`), label "Nombre del cliente" para el selector de usuario.
 - **"Cerrar Escáner"** (modal de cámara): botón outline transparente con borde blanco + ícono ✕, cuadrado (`borderRadius="$md"`), para no tapar la cámara.
+- **Escáner sin `<Modal>`:** tanto el del POS (`app/index.tsx`) como el de código de barras al crear/editar producto (`app/admin/products/index.tsx`) se renderizan como overlay absoluto (`{isScanning && <Box style={StyleSheet.absoluteFill}>...}`) en la ventana principal, **no** dentro de un `<Modal>`. En Magic OS (Honor) la ventana separada que crea `<Modal>` compone mal el `SurfaceView` de `CameraView` — dejaba media pantalla congelada hasta cambiar de app. Tampoco usar `presentationStyle="pageSheet"` en Android: RN 0.81 ya lo respeta y en Magic OS dimensiona la hoja a media pantalla. **No basta con que la cámara no sea hija de un Modal:** en `admin/products/index.tsx` el botón "escanear" vive dentro del `<Modal>` de alta/edición, y dejarlo montado de fondo mientras se escanea reproduce el mismo bug (dos ventanas nativas concurrentes). `openScanner`/`closeScanner` ocultan (`setModalVisible(false)`) ese Modal al entrar al escáner y lo restauran al salir (por escaneo o cancelación), preservando el estado del formulario. Regla completa: **ningún `<Modal>` puede quedar montado mientras `isScanning` sea true**, ni como padre ni como hermano concurrente. Si se agrega un tercer escáner, aplicar el mismo patrón desde el inicio.
+- **Notificación única en escaneo fallido (`app/index.tsx`):** código no registrado o sin stock ya no dispara una cascada de toasts — `expo-camera` reinvoca `onBarcodeScanned` en cada frame mientras el código sigue en cuadro, y solo el caso de éxito bloqueaba el guard (`scannedProduct`). Estado `scanError` (`{ title, message } | null`) bloquea reentradas también en los casos de error (`if (scannedProduct || scanError) return`) y muestra una sola tarjeta centrada (mismo look que el producto encontrado), con botón "Entendido" para cerrarla y seguir escaneando.
+- **Tarjetas de producto sin ícono**: el círculo con emoji (🛒/⚠️/❌) se eliminó — el color pastel de categoría (ver "Color por categoría" abajo) y el texto de stock en ámbar cuando es bajo son las únicas señales visuales que quedan. Los productos con `stock <= 0` no se muestran en la grilla ni se cuentan en los chips de categoría (`inStockProducts` filtra antes de todo lo demás).
+- **PIN como contraseña**: el campo de PIN de checkout usa `secureTextEntry` (se oculta al escribir) **sin** `autoCapitalize` — combinar ambos rompe el estado controlado en Android (el campo nunca llega a los 4 caracteres). El casing a mayúsculas se hace solo en `onChangeText` (`t.toUpperCase()`). En `admin/users/index.tsx` el PIN generado de cada usuario se muestra oculto por defecto (`•  •  •  •`) con un ícono de ojo para revelarlo por tarjeta — evita que alguien cerca del admin lea el PIN de otro usuario mientras se genera uno nuevo.
+
+### Color por categoría (`utils/categoryColor.ts`)
+Paleta pastel determinística por `category.id` (no `Math.random()`: así el color de cada categoría es estable entre reinicios de la app, no solo "distinto y sin repetirse" sino también consistente):
+- `categoryColors(id)`: hue = `(id * 137.508) % 360` (ángulo dorado — separación perceptual máxima, nunca coincide entre ids consecutivos). Devuelve `{ bg: hsl(…,45%,95%), border: hsl(…,45%,78%) }`.
+- `ARTESANAL_COLOR`: color fijo (no entra en la rotación) — Artesanales es un filtro derivado del barcode, no una categoría real con id.
+- `productColor(product)`: resuelve el color final de un producto con **precedencia artesanal > categoría** — si el producto no tiene código de barras, usa `ARTESANAL_COLOR` aunque además tenga `category_id` asignado.
+
+Uso: chips de filtro (fondo pastel siempre, estado activo marcado con `borderWidth={2}` del mismo hue más saturado — el texto es **siempre** `$coolGray800`, nunca blanco, porque el fondo es casi blanco en ambos estados) y tarjetas de producto (mismo `bg`/`border` pastel que su chip, `borderWidth={1}`, sin `variant="elevated"` — con fondo casi blanco no hace falta sombra para separar tarjetas).
 
 ### 1. Limpieza técnica ✅
 - Borrado `app/admin/pins/` (legacy roto). PIN admin centralizado en `utils/constants.ts` → `ADMIN_PIN` (lee `EXPO_PUBLIC_ADMIN_PIN`). Columna `is_used` deprecada.
@@ -255,3 +280,9 @@ Hecha. Ver sección **"Sistema de color"** arriba para los roles semánticos. No
 
 ### Fase de pruebas — EN CURSO (gate final antes de producción)
 **Estado actual (2026-06-30):** APK local funcionando bien en dispositivo real. Ahora vienen **varios días de pruebas** operando la app en condiciones reales para verificar que TODO funciona como debería antes del build de producción. No dar por cerrado el proyecto ni hacer cambios grandes hasta que las pruebas confirmen estabilidad — cualquier bug que aparezca en el uso diario tiene prioridad. Cubrir los 10 flujos de la sección **"3. Fase de pruebas exhaustivas"** de arriba.
+
+**Bugs encontrados y arreglados en uso real (2026-07-14):**
+1. Escáner del POS lanzaba una cascada de toasts al leer un código no registrado o sin stock (ver "Notificación única en escaneo fallido" arriba).
+2. Escáner de código de barras en `admin/products` se congelaba en Magic OS por el `<Modal>` del formulario quedando montado de fondo (ver "Escáner sin `<Modal>`" arriba).
+3. Hora incorrecta (~6h de desfase) en el historial de inventario y en el historial de ventas — faltaba la normalización UTC (ver "Fechas y timezone" arriba).
+4. **Crítico:** productos con `cost_price` decimal no se respaldaban en Turso, ni con el respaldo manual — bug de protocolo (`'real'` vs `'float'` en Hrana, ver Feature 7 arriba). Afectó datos reales del dispositivo "Punto de venta Chachagua"; requirió un "Respaldar en la nube" manual post-fix para subir el catálogo retroactivamente.
