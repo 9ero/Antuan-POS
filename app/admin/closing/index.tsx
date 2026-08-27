@@ -7,6 +7,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
     CashClosing, ClosingSummary, ClosingProductSummary,
+    ClosingInventoryItem,
     getCurrentPeriodStart, buildClosingSummary,
     createCashClosing, getCashClosings,
 } from '@/db/queries';
@@ -37,6 +38,9 @@ import {
 } from '@gluestack-ui/themed';
 
 const fmt = (n: number) => `₡${Math.round(n).toLocaleString('es-CR')}`;
+
+// Mismo umbral que la pantalla de Inventario (app/admin/inventory/index.tsx)
+const LOW_STOCK = 5;
 
 function autoFitCols(ws: XLSX.WorkSheet): void {
     const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
@@ -312,15 +316,48 @@ export default function CashClosingScreen() {
             ]),
         ];
 
+        // Sheet 5: Inventario (foto del stock al momento del cierre)
+        // Los cierres anteriores a esta versión no traen la foto en su summary_json.
+        const inv: ClosingInventoryItem[] = s.inventory ?? [];
+        const stockState = (n: number) => n <= 0 ? 'Agotado' : n <= LOW_STOCK ? 'Stock bajo' : 'OK';
+        const inventarioRows: object[] = inv.length === 0
+            ? [{ Producto: 'Sin datos de inventario para este cierre' }]
+            : [
+                ...inv.map(p => ({
+                    Producto: p.name,
+                    Categoría: p.categoryName,
+                    'Código de barras': p.barcode || '—',
+                    Stock: p.stock,
+                    Estado: stockState(p.stock),
+                    'Costo unit. (₡)': fmtN(p.costPrice),
+                    'Precio venta (₡)': fmtN(p.price),
+                    'Valor a costo (₡)': fmtN(p.stockValueCost),
+                    'Valor a venta (₡)': fmtN(p.stockValueSale),
+                })),
+                {
+                    Producto: 'TOTAL',
+                    Categoría: `${inv.length} productos`,
+                    'Código de barras': '',
+                    Stock: inv.reduce((a, p) => a + p.stock, 0),
+                    Estado: `${inv.filter(p => p.stock <= 0).length} agotados · ${inv.filter(p => p.stock > 0 && p.stock <= LOW_STOCK).length} bajos`,
+                    'Costo unit. (₡)': '',
+                    'Precio venta (₡)': '',
+                    'Valor a costo (₡)': fmtN(inv.reduce((a, p) => a + p.stockValueCost, 0)),
+                    'Valor a venta (₡)': fmtN(inv.reduce((a, p) => a + p.stockValueSale, 0)),
+                },
+            ];
+
         const wb = XLSX.utils.book_new();
         const ws1 = XLSX.utils.json_to_sheet(resumenData);   autoFitCols(ws1);
         const ws2 = XLSX.utils.json_to_sheet(clienteRows);   autoFitCols(ws2);
         const ws3 = XLSX.utils.json_to_sheet(productoRows);  autoFitCols(ws3);
         const ws4 = XLSX.utils.aoa_to_sheet(statsAoa);       autoFitCols(ws4);
+        const ws5 = XLSX.utils.json_to_sheet(inventarioRows); autoFitCols(ws5);
         XLSX.utils.book_append_sheet(wb, ws1, 'Resumen');
         XLSX.utils.book_append_sheet(wb, ws2, 'Por Cliente');
         XLSX.utils.book_append_sheet(wb, ws3, 'Por Producto');
         XLSX.utils.book_append_sheet(wb, ws4, 'Estadísticas');
+        XLSX.utils.book_append_sheet(wb, ws5, 'Inventario');
 
         const dateStr = new Date(s.closedAt).toLocaleDateString('es-CR').replace(/\//g, '-');
         const filename = `cierre-${dateStr}.xlsx`;

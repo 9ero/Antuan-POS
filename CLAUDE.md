@@ -104,7 +104,8 @@ Tercer tipo de movimiento en `stock_movements` (`reason = 'traslado'`), para cua
 ## Cierre de caja (`app/admin/closing/index.tsx`)
 - `buildClosingSummary(openedAt, closedAt)` — agrega transacciones + ítems + faltantes del período en JS
 - `computeStats(summary)` — rankings: consumo más rápido (uds/día) y mayor ganancia total (sin faltantes)
-- Excel 4 hojas: Resumen, Por Cliente, Por Producto, Estadísticas — solo se genera al confirmar cierre
+- Excel 5 hojas: Resumen, Por Cliente, Por Producto, Estadísticas, **Inventario** — solo se genera al confirmar cierre
+- **Hoja "Inventario"**: foto del stock al momento del cierre (producto, categoría, código, stock, estado, costo/precio unitario, valor a costo y a venta + fila TOTAL con unidades, agotados/bajos y valor del inventario). La construye `buildInventorySnapshot()` (`db/queries.ts`, todos los productos `is_active = 1`, orden stock asc + nombre) y `buildClosingSummary` la incrusta en `ClosingSummary.inventory`, así que viaja dentro de `summary_json`: **reexportar un cierre viejo muestra el stock de ese día, no el de hoy**. Umbral `LOW_STOCK = 5`, el mismo de la pantalla de Inventario. Los cierres confirmados antes de esta versión no tienen el campo — su hoja sale con la fila "Sin datos de inventario para este cierre" (decisión explícita: no se rellena con el stock actual porque sería falsear la fecha, y no se reconstruye hacia atrás desde `stock_movements`)
 - **No hay botón "Exportar Excel" en el período abierto** — el Excel es exclusivo del cierre confirmado para evitar duplicados con el reporte oficial
 - Historial de cierres anteriores con botones Compartir (texto) y Excel
 - `handleClose` usa patrón completo `if (isSubmitting) return` + `try/finally` para evitar doble registro

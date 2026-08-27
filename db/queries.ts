@@ -360,6 +360,20 @@ export interface ClosingProductSummary {
     daysRemaining: number | null;
 }
 
+// Foto del inventario al momento del cierre. Se guarda dentro de summary_json para que
+// un cierre viejo se exporte con el stock que tenía ese día, no con el stock de hoy.
+export interface ClosingInventoryItem {
+    productId: number;
+    name: string;
+    categoryName: string;
+    barcode: string;
+    stock: number;
+    costPrice: number;
+    price: number;
+    stockValueCost: number;
+    stockValueSale: number;
+}
+
 export interface ClosingSummary {
     openedAt: string;
     closedAt: string;
@@ -369,7 +383,34 @@ export interface ClosingSummary {
     totalProfit: number;
     byUser: ClosingUserSummary[];
     byProduct: ClosingProductSummary[];
+    inventory: ClosingInventoryItem[];
 }
+
+export const buildInventorySnapshot = async (): Promise<ClosingInventoryItem[]> => {
+    const rows = await dbResult.getAllAsync<{
+        id: number; name: string; barcode: string | null; stock: number;
+        cost_price: number; price: number; category_name: string | null;
+    }>(
+        `SELECT p.id, p.name, p.barcode, p.stock, p.price,
+                COALESCE(p.cost_price, 0) as cost_price,
+                c.name as category_name
+         FROM products p
+         LEFT JOIN categories c ON p.category_id = c.id
+         WHERE p.is_active = 1
+         ORDER BY p.stock ASC, p.name ASC`
+    );
+    return rows.map(r => ({
+        productId: r.id,
+        name: r.name,
+        categoryName: r.category_name ?? 'Sin categoría',
+        barcode: r.barcode ?? '',
+        stock: r.stock,
+        costPrice: r.cost_price,
+        price: r.price,
+        stockValueCost: r.stock * r.cost_price,
+        stockValueSale: r.stock * r.price,
+    }));
+};
 
 export const getCurrentPeriodStart = async (): Promise<string> => {
     const lastClosing = await dbResult.getFirstAsync<{ closed_at: string }>(
@@ -386,6 +427,8 @@ export const getCurrentPeriodStart = async (): Promise<string> => {
 };
 
 export const buildClosingSummary = async (openedAt: string, closedAt: string): Promise<ClosingSummary> => {
+    const inventory = await buildInventorySnapshot();
+
     const transactions = await dbResult.getAllAsync<{
         id: number; user_id: number | null; total: number; user_name: string | null;
     }>(
@@ -397,7 +440,7 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
     );
 
     if (transactions.length === 0) {
-        return { openedAt, closedAt, transactionCount: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0, byUser: [], byProduct: [] };
+        return { openedAt, closedAt, transactionCount: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0, byUser: [], byProduct: [], inventory };
     }
 
     const items = await dbResult.getAllAsync<{
@@ -572,6 +615,7 @@ export const buildClosingSummary = async (openedAt: string, closedAt: string): P
         totalProfit: totalRevenue - totalCost,
         byUser: Array.from(userMap.values()).sort((a, b) => b.total - a.total),
         byProduct,
+        inventory,
     };
 };
 
