@@ -190,7 +190,7 @@ Admin → "⚙ Reset (dev)" ofrece:
 - **Wipe completo**: vacía todas las tablas locales (Turso no se toca) — para simular reinstalación y probar restore
 
 ## Estado de features (roadmap aprobado)
-- ✅ Feature 1: Precio de costo + margen (20/30/40%) en productos
+- ✅ Feature 1: Precio de costo + margen (20/30/40% + Custom) en productos — el % guardado es siempre el real, derivado de costo y precio de venta
 - ✅ Feature 2: Filtros en historial + Excel mejorado (3 hojas: Detalle, Por Cliente, Por Producto)
 - ✅ Feature 3: PIN de checkout por usuario (reusable, gestionado desde panel de Usuarios)
 - ✅ Feature 4: Inventario + movimientos de stock + faltantes
@@ -238,6 +238,14 @@ Uso: chips de filtro (fondo pastel siempre, estado activo marcado con `borderWid
 
 ### 1. Limpieza técnica ✅
 - Borrado `app/admin/pins/` (legacy roto). PIN admin centralizado en `utils/constants.ts` → `ADMIN_PIN` (lee `EXPO_PUBLIC_ADMIN_PIN`). Columna `is_used` deprecada.
+
+### Margen de producto (`app/admin/products/index.tsx`)
+El margen se elige **antes** del precio y es quien lo determina. Orden de campos: Nombre → Precio de costo → Margen → Precio de venta → Margen real.
+- **Presets 20/30/40**: el precio de venta es una caja de **solo lectura** calculada con `calcSellPrice(cost, margin)` (redondeo a ₡5). Cambiar el costo mueve el precio solo. Cada chip muestra debajo el precio que aplicaría.
+- **Custom**: cuarto chip, **desbloquea el precio de venta** para escribirlo a mano (precargado con el que ya se mostraba). Es también el camino para productos **sin costo** (los que antes usaban precio manual), por eso la fila de margen se muestra siempre, aunque no haya costo.
+- **El porcentaje NO es editable en ningún modo.** Se muestra como "Margen real" en una caja de solo lectura: `calcMargin(cost, price)` = `Math.round(((price - cost) / cost) * 100)`. Es el valor **efectivo después del redondeo a ₡5**, así que puede no coincidir con el preset elegido (costo ₡33 al 30% → ₡42.90 → ₡45 → margen real 36%). Ese valor real es el que se guarda en `margin_percentage`.
+- Fuente de verdad según el modo: en `preset` manda `margin_percentage`, en `custom` manda `price`. Un solo `finalPrice` resuelve ambos y es lo que se valida y se guarda — así **el `cost_price` siempre se registra**, incluso con precio custom (antes, poner precio manual obligaba a dejar el costo vacío).
+- Al editar, `detectMargin(product)` reconstruye el estado: si el precio guardado coincide exacto con un preset marca ese chip; si no —o si el producto no tiene costo— entra en Custom con su precio intacto.
 
 ### 2. Feature 9 — Categorías en el POS ✅
 - **Categorías como entidad propia** (tabla `categories`, no strings): id, name (UNIQUE), is_active. Evita errores/duplicados por texto libre. `products.category_id` FK → `categories.id`.

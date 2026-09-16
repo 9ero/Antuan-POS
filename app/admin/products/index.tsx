@@ -34,12 +34,37 @@ import {
 import { useScanner } from '@/hooks/useScanner';
 
 const MARGINS = [20, 30, 40] as const;
-type Margin = typeof MARGINS[number];
 
+// Precio de venta sugerido para un margen dado, redondeado a la moneda mínima (₡5)
 const calcSellPrice = (cost: number, margin: number) =>
     Math.round(cost * (1 + margin / 100) / 5) * 5;
 
-const emptyForm = { name: '', cost_price: '', margin_percentage: 30 as Margin, price: '', barcode: '', stock: '', category_id: null as number | null };
+// Margen real que resulta de un costo y un precio de venta (lo que se guarda en DB)
+const calcMargin = (cost: number, price: number) =>
+    cost > 0 && price > 0 ? Math.round(((price - cost) / cost) * 100) : 0;
+
+// 'preset' = el margen manda y el precio de venta se calcula (campo bloqueado);
+// 'custom'  = el precio de venta lo escribe el usuario y el margen se muestra derivado.
+type MarginMode = 'preset' | 'custom';
+type Margin = typeof MARGINS[number];
+
+const emptyForm = {
+    name: '', cost_price: '',
+    margin_mode: 'preset' as MarginMode,
+    margin_percentage: 30 as Margin,
+    price: '',   // solo se usa en modo custom
+    barcode: '', stock: '', category_id: null as number | null,
+};
+
+// Al editar: si el precio guardado cae justo en un preset lo reconstruye, si no entra en Custom
+const detectMargin = (p: { cost_price?: number; price: number }): { mode: MarginMode; preset: Margin } => {
+    const cost = p.cost_price ?? 0;
+    if (cost > 0 && p.price > 0) {
+        const m = MARGINS.find(x => p.price === calcSellPrice(cost, x));
+        if (m) return { mode: 'preset', preset: m };
+    }
+    return { mode: 'custom', preset: 30 };
+};
 
 const normalize = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -90,22 +115,44 @@ export default function ProductsAdmin() {
         getDeviceConfig().then(cfg => { if (cfg) pushProductToTurso(cfg.deviceId, id).catch(() => {}); });
     };
 
-    const hasCost = parseFloat(newProduct.cost_price) > 0;
-    const computedPrice = hasCost
-        ? calcSellPrice(parseFloat(newProduct.cost_price), newProduct.margin_percentage)
-        : parseFloat(newProduct.price) || 0;
+    const costNum = parseFloat(newProduct.cost_price) || 0;
+    const hasCost = costNum > 0;
+    const isCustomMargin = newProduct.margin_mode === 'custom';
+
+    // En preset el precio lo manda el margen; en custom lo escribe el usuario
+    const finalPrice = isCustomMargin
+        ? parseFloat(newProduct.price) || 0
+        : calcSellPrice(costNum, newProduct.margin_percentage);
+
+    // El % que se guarda es siempre el real, ya con el redondeo a ₡5 aplicado
+    const computedMargin = calcMargin(costNum, finalPrice);
+    const computedProfit = hasCost && finalPrice > 0 ? finalPrice - costNum : 0;
+
+    // Preset: el precio de venta pasa a ser calculado y de solo lectura
+    const selectPreset = (m: Margin) =>
+        setNewProduct({ ...newProduct, margin_mode: 'preset', margin_percentage: m });
+
+    // Custom: desbloquea el precio de venta, arrancando desde el que ya se mostraba
+    const selectCustom = () =>
+        setNewProduct({
+            ...newProduct,
+            margin_mode: 'custom',
+            price: finalPrice > 0 ? String(finalPrice) : newProduct.price,
+        });
 
     const handleAdd = async () => {
         if (!newProduct.name) { showError('El nombre es requerido'); return; }
-        if (!hasCost && !newProduct.price) { showError('Ingresa el precio de costo o el precio de venta'); return; }
+        if (!(finalPrice > 0)) {
+            showError(isCustomMargin
+                ? 'Ingresa el precio de venta'
+                : 'Ingresa el precio de costo para calcular el precio de venta');
+            return;
+        }
         if (newProduct.category_id == null) { showError('Seleccioná una categoría'); return; }
         if (isSubmitting) return;
         setIsSubmitting(true);
 
-        const finalPrice = hasCost
-            ? calcSellPrice(parseFloat(newProduct.cost_price), newProduct.margin_percentage)
-            : parseFloat(newProduct.price);
-        const finalCost = parseFloat(newProduct.cost_price) || 0;
+        const finalCost = costNum;
 
         try {
             let savedId: number;
@@ -116,7 +163,7 @@ export default function ProductsAdmin() {
                     finalPrice,
                     newProduct.barcode,
                     finalCost,
-                    newProduct.margin_percentage,
+                    computedMargin,
                     newProduct.category_id,
                 );
             } else {
@@ -126,7 +173,7 @@ export default function ProductsAdmin() {
                     newProduct.barcode,
                     parseInt(newProduct.stock || '0'),
                     finalCost,
-                    newProduct.margin_percentage,
+                    computedMargin,
                     newProduct.category_id,
                 );
             }
@@ -143,13 +190,13 @@ export default function ProductsAdmin() {
     };
 
     const handleEdit = (product: Product) => {
+        const { mode, preset } = detectMargin(product);
         setNewProduct({
             name: product.name,
             cost_price: (product.cost_price ?? 0) > 0 ? String(product.cost_price) : '',
-            margin_percentage: ([20, 30, 40].includes(product.margin_percentage ?? 0)
-                ? product.margin_percentage
-                : 30) as Margin,
-            price: (product.cost_price ?? 0) > 0 ? '' : product.price.toString(),
+            margin_mode: mode,
+            margin_percentage: preset,
+            price: product.price.toString(),
             barcode: product.barcode || '',
             stock: product.stock.toString(),
             category_id: product.category_id ?? null,
@@ -276,46 +323,72 @@ export default function ProductsAdmin() {
                                 <Input>
                                     <InputField
                                         keyboardType="numeric"
-                                        placeholder="Opcional"
+                                        placeholder="Ej. 400"
                                         value={newProduct.cost_price}
                                         onChangeText={t => setNewProduct({ ...newProduct, cost_price: t })}
                                     />
                                 </Input>
                             </FormControl>
 
-                            {/* Selector de margen */}
+                            {/* Margen: se elige ANTES del precio, porque lo determina */}
                             <FormControl>
-                                <FormControlLabel><FormControlLabelText>Margen de ganancia</FormControlLabelText></FormControlLabel>
+                                <FormControlLabel><FormControlLabelText>Margen</FormControlLabelText></FormControlLabel>
                                 <HStack space="sm">
-                                    {MARGINS.map(m => (
-                                        <Pressable
-                                            key={m}
-                                            flex={1}
-                                            onPress={() => setNewProduct({ ...newProduct, margin_percentage: m })}
-                                            bg={newProduct.margin_percentage === m ? '$blue600' : '$coolGray100'}
-                                            borderRadius="$md"
-                                            py="$2"
-                                            alignItems="center"
-                                        >
-                                            <Text
-                                                fontWeight="$bold"
-                                                color={newProduct.margin_percentage === m ? '$white' : '$coolGray700'}
+                                    {MARGINS.map(m => {
+                                        const active = !isCustomMargin && newProduct.margin_percentage === m;
+                                        return (
+                                            <Pressable
+                                                key={m}
+                                                flex={1}
+                                                onPress={() => selectPreset(m)}
+                                                bg={active ? '$blue600' : '$coolGray100'}
+                                                borderRadius="$md"
+                                                py="$2"
+                                                alignItems="center"
                                             >
-                                                {m}%
-                                            </Text>
-                                        </Pressable>
-                                    ))}
+                                                <Text fontWeight="$bold" color={active ? '$white' : '$coolGray700'}>
+                                                    {m}%
+                                                </Text>
+                                                <Text size="xs" color={active ? '$blue100' : '$coolGray500'}>
+                                                    {hasCost ? `₡${calcSellPrice(costNum, m)}` : '—'}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                    <Pressable
+                                        flex={1}
+                                        onPress={selectCustom}
+                                        bg={isCustomMargin ? '$blue600' : '$coolGray100'}
+                                        borderRadius="$md"
+                                        py="$2"
+                                        alignItems="center"
+                                    >
+                                        <Text fontWeight="$bold" color={isCustomMargin ? '$white' : '$coolGray700'}>
+                                            Custom
+                                        </Text>
+                                        <Text size="xs" color={isCustomMargin ? '$blue100' : '$coolGray500'}>
+                                            manual
+                                        </Text>
+                                    </Pressable>
                                 </HStack>
                             </FormControl>
 
-                            {/* Precio de venta: computed si hay costo, manual si no */}
+                            {/* Precio de venta: calculado y bloqueado en preset, editable en Custom */}
                             <FormControl>
                                 <FormControlLabel>
                                     <FormControlLabelText>
-                                        Precio de venta (₡){hasCost ? ' — calculado' : ''}
+                                        Precio de venta (₡){isCustomMargin ? '' : ' — calculado'}
                                     </FormControlLabelText>
                                 </FormControlLabel>
-                                {hasCost ? (
+                                {isCustomMargin ? (
+                                    <Input>
+                                        <InputField
+                                            keyboardType="numeric"
+                                            value={newProduct.price}
+                                            onChangeText={t => setNewProduct({ ...newProduct, price: t })}
+                                        />
+                                    </Input>
+                                ) : (
                                     <Box
                                         bg="$coolGray100"
                                         borderRadius="$md"
@@ -324,20 +397,42 @@ export default function ProductsAdmin() {
                                         borderWidth={1}
                                         borderColor="$coolGray200"
                                     >
-                                        <Text fontWeight="$bold" color="$blue700" size="lg">
-                                            ₡{computedPrice.toFixed(0)}
+                                        <Text fontWeight="$bold" color={hasCost ? '$blue700' : '$coolGray400'} size="lg">
+                                            {hasCost ? `₡${finalPrice.toFixed(0)}` : 'Ingresá el precio de costo'}
                                         </Text>
                                     </Box>
-                                ) : (
-                                    <Input>
-                                        <InputField
-                                            keyboardType="numeric"
-                                            value={newProduct.price}
-                                            onChangeText={t => setNewProduct({ ...newProduct, price: t })}
-                                        />
-                                    </Input>
                                 )}
                             </FormControl>
+
+                            {/* Margen real: solo lectura, ya con el redondeo a ₡5 aplicado */}
+                            <Box
+                                bg={hasCost ? '$emerald50' : '$coolGray100'}
+                                borderRadius="$md"
+                                px="$3"
+                                py="$3"
+                                borderWidth={1}
+                                borderColor={hasCost ? '$emerald100' : '$coolGray200'}
+                            >
+                                {hasCost && finalPrice > 0 ? (
+                                    <HStack justifyContent="space-between" alignItems="center">
+                                        <Text size="sm" color="$coolGray600">Margen real</Text>
+                                        <Text
+                                            fontWeight="$bold"
+                                            size="lg"
+                                            color={computedMargin < 0 ? '$red600' : '$emerald700'}
+                                        >
+                                            {computedMargin}%{'  '}
+                                            <Text size="sm" color="$coolGray500">
+                                                (₡{computedProfit.toFixed(0)} por unidad)
+                                            </Text>
+                                        </Text>
+                                    </HStack>
+                                ) : (
+                                    <Text size="sm" color="$coolGray500">
+                                        Ingresá el precio de costo para calcular el margen
+                                    </Text>
+                                )}
+                            </Box>
 
                             <FormControl isDisabled={!!editingId}>
                                 <FormControlLabel>
